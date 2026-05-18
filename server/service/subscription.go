@@ -47,6 +47,11 @@ func PullSubscriptionWithContext(ctx context.Context, sub *model.Subscription, o
 			sshKeyPath = tmpFile
 		}
 	}
+	authCfg, err := buildGitAuthConfig(os.Environ(), sub.URL, sub, sshKeyPath)
+	if err != nil {
+		return "", err
+	}
+	defer authCfg.CleanupFunc()
 
 	var fullLog strings.Builder
 	emit := func(line string) {
@@ -66,7 +71,7 @@ func PullSubscriptionWithContext(ctx context.Context, sub *model.Subscription, o
 	case model.SubTypeSingleFile:
 		output, pullErr = pullSingleFileWithCallback(ctx, sub, sshKeyPath, emit)
 	default:
-		output, pullErr = pullGitRepoWithCallback(ctx, sub, sshKeyPath, emit)
+		output, pullErr = pullGitRepoWithCallback(ctx, sub, authCfg, emit)
 	}
 
 	if pullErr == nil && ctx.Err() != nil {
@@ -159,7 +164,7 @@ func gitHasWorkingTreeChanges(ctx context.Context, repoDir string, env []string)
 	return strings.TrimSpace(string(output)) != "", nil
 }
 
-func pullGitRepoWithCallback(ctx context.Context, sub *model.Subscription, sshKeyPath string, emit PullCallback) (string, error) {
+func pullGitRepoWithCallback(ctx context.Context, sub *model.Subscription, authCfg gitAuthConfig, emit PullCallback) (string, error) {
 	saveDir := sub.SaveDir
 	if saveDir == "" {
 		saveDir = sub.Alias
@@ -170,11 +175,7 @@ func pullGitRepoWithCallback(ctx context.Context, sub *model.Subscription, sshKe
 	}
 
 	destDir := filepath.Join(config.C.Data.ScriptsDir, saveDir)
-
-	env, err := appendGitSSHEnv(os.Environ(), sshKeyPath)
-	if err != nil {
-		return "", err
-	}
+	env := authCfg.Env
 
 	if IsGitRepo(destDir) {
 		var fullOutput strings.Builder
@@ -184,8 +185,8 @@ func pullGitRepoWithCallback(ctx context.Context, sub *model.Subscription, sshKe
 		}
 
 		emit(fmt.Sprintf("[检测到已有仓库] %s 已存在 Git 仓库，接下来会同步远端并覆盖更新本地文件", saveDir))
-		emit(fmt.Sprintf("[同步远端地址] 正在校正订阅地址 -> %s", sub.URL))
-		output, err := syncGitRemoteWithCallback(ctx, destDir, sub.URL, env, emit)
+		emit(fmt.Sprintf("[同步远端地址] 正在校正订阅地址 -> %s", authCfg.RemoteURL))
+		output, err := syncGitRemoteWithCallback(ctx, destDir, authCfg.RemoteURL, env, emit)
 		fullOutput.WriteString(output)
 		if err != nil {
 			return fullOutput.String(), err
@@ -297,8 +298,8 @@ func pullGitRepoWithCallback(ctx context.Context, sub *model.Subscription, sshKe
 				return fullOutput.String(), err
 			}
 
-			emit(fmt.Sprintf("[同步远端地址] 正在校正订阅地址 -> %s", sub.URL))
-			output, err = syncGitRemoteWithCallback(ctx, destDir, sub.URL, env, emit)
+			emit(fmt.Sprintf("[同步远端地址] 正在校正订阅地址 -> %s", authCfg.RemoteURL))
+			output, err = syncGitRemoteWithCallback(ctx, destDir, authCfg.RemoteURL, env, emit)
 			fullOutput.WriteString(output)
 			if err != nil {
 				return fullOutput.String(), err
@@ -354,13 +355,13 @@ func pullGitRepoWithCallback(ctx context.Context, sub *model.Subscription, sshKe
 		}
 	}
 
-	emit(fmt.Sprintf("[git clone] %s -> %s", sub.URL, saveDir))
+	emit(fmt.Sprintf("[git clone] %s -> %s", authCfg.RemoteURL, saveDir))
 	os.MkdirAll(destDir, 0755)
 	args := []string{"clone", "--depth", "1"}
 	if sub.Branch != "" {
 		args = append(args, "-b", sub.Branch)
 	}
-	args = append(args, sub.URL, destDir)
+	args = append(args, authCfg.RemoteURL, destDir)
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = config.C.Data.ScriptsDir
 	cmd.Env = env

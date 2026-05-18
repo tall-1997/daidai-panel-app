@@ -68,7 +68,7 @@ var registeredSystemConfigSpecs = []systemConfigSpec{
 	newTrimmedStringConfig("panel_title", "呆呆面板", "面板标题", "branding"),
 	newTrimmedStringConfig("panel_icon", "", "面板图标（SVG data URL）", "branding"),
 	newTrimmedStringConfig("editor_background_color", "", "脚本编辑器背景颜色（留空使用默认样式）", "branding"),
-	newTrimmedStringConfig("log_background_color", "#0f172a", "日志视图背景颜色（建议使用深色）", "branding"),
+	newTrimmedStringConfig("log_background_color", "", "日志视图背景颜色（留空跟随当前主题）", "branding"),
 	newTrimmedStringConfig("log_background_image", "", "日志视图背景图片（data URL）", "branding"),
 	newBoolConfig("backup_schedule_enabled", "false", "启用定时备份", "backup"),
 	newEnumConfig(

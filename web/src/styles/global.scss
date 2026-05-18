@@ -132,10 +132,11 @@ html, body {
   --dd-transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   --dd-font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
   --dd-font-ui: 'Inter', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
-  --dd-log-bg-color: #0f172a;
+  --dd-log-bg-color: #f8fafc;
   --dd-log-bg-image: none;
   --dd-log-border-color: rgba(148, 163, 184, 0.18);
-  --dd-log-text-color: #e2e8f0;
+  --dd-log-text-color: #111827;
+  --dd-log-theme-mode: light;
   --dd-mobile-gap: 12px;
   --dd-mobile-card-padding: 14px;
 }
@@ -355,6 +356,10 @@ a {
 }
 
 html.dark {
+  --dd-log-bg-color: #0f172a;
+  --dd-log-text-color: #e2e8f0;
+  --dd-log-theme-mode: dark;
+
   .el-card {
     border-color: var(--el-border-color-darker);
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
@@ -503,8 +508,12 @@ html.dark {
 .dd-log-surface {
   background-color: var(--dd-log-bg-color);
   background-image:
-    radial-gradient(circle at top right, rgba(148, 163, 184, 0.16), transparent 24%),
-    linear-gradient(155deg, rgba(15, 23, 42, 0.88), rgba(30, 41, 59, 0.76)),
+    radial-gradient(circle at top right,
+      color-mix(in srgb, var(--dd-log-text-color) 10%, transparent),
+      transparent 24%),
+    linear-gradient(155deg,
+      color-mix(in srgb, var(--dd-log-bg-color) 96%, white),
+      color-mix(in srgb, var(--dd-log-bg-color) 88%, var(--dd-log-text-color) 8%)),
     var(--dd-log-bg-image);
   background-position: center, center, center;
   background-repeat: no-repeat, no-repeat, no-repeat;

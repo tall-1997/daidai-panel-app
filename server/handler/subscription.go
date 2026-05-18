@@ -104,6 +104,28 @@ func NewSubscriptionHandler() *SubscriptionHandler {
 	return &SubscriptionHandler{}
 }
 
+func normalizeSubscriptionAuthInput(authType string, sshKeyID *uint, authToken string) (string, *uint, string, error) {
+	normalizedType := model.NormalizeSubscriptionAuthType(authType)
+	trimmedToken := strings.TrimSpace(authToken)
+
+	switch normalizedType {
+	case "":
+		return "", nil, "", nil
+	case model.SubAuthTypeSSH:
+		if sshKeyID == nil || *sshKeyID == 0 {
+			return "", nil, "", fmt.Errorf("已选择 SSH 鉴权，请指定 SSH 密钥")
+		}
+		return normalizedType, sshKeyID, "", nil
+	case model.SubAuthTypeToken:
+		if trimmedToken == "" {
+			return "", nil, "", fmt.Errorf("已选择 Token 鉴权，请填写访问令牌")
+		}
+		return normalizedType, nil, trimmedToken, nil
+	default:
+		return "", nil, "", fmt.Errorf("无效的仓库鉴权方式")
+	}
+}
+
 func (h *SubscriptionHandler) List(c *gin.Context) {
 	keyword := c.Query("keyword")
 	subType := c.Query("type")
@@ -165,6 +187,8 @@ func (h *SubscriptionHandler) Create(c *gin.Context) {
 		SaveDir        string `json:"save_dir"`
 		SubPath        string `json:"sub_path"`
 		SSHKeyID       *uint  `json:"ssh_key_id"`
+		AuthType       string `json:"auth_type"`
+		AuthToken      string `json:"auth_token"`
 		Alias          string `json:"alias"`
 		ForceOverwrite *bool  `json:"force_overwrite"`
 	}
@@ -178,6 +202,11 @@ func (h *SubscriptionHandler) Create(c *gin.Context) {
 	}
 	if !service.ValidateSubscriptionSchedule(req.Schedule) {
 		response.BadRequest(c, "无效的订阅定时规则")
+		return
+	}
+	authType, sshKeyID, authToken, err := normalizeSubscriptionAuthInput(req.AuthType, req.SSHKeyID, req.AuthToken)
+	if err != nil {
+		response.BadRequest(c, err.Error())
 		return
 	}
 
@@ -196,7 +225,9 @@ func (h *SubscriptionHandler) Create(c *gin.Context) {
 		Enabled:        true,
 		SaveDir:        req.SaveDir,
 		SubPath:        req.SubPath,
-		SSHKeyID:       req.SSHKeyID,
+		SSHKeyID:       sshKeyID,
+		AuthType:       authType,
+		AuthToken:      authToken,
 		Alias:          req.Alias,
 		ForceOverwrite: req.ForceOverwrite,
 	}
@@ -233,7 +264,7 @@ func (h *SubscriptionHandler) Update(c *gin.Context) {
 		"name": true, "type": true, "url": true, "branch": true,
 		"schedule": true, "whitelist": true, "blacklist": true,
 		"depend_on": true, "hook_script": true, "auto_add_task": true, "auto_del_task": true,
-		"save_dir": true, "sub_path": true, "ssh_key_id": true, "alias": true, "force_overwrite": true,
+		"save_dir": true, "sub_path": true, "ssh_key_id": true, "auth_type": true, "auth_token": true, "alias": true, "force_overwrite": true,
 	}
 	updates := make(map[string]interface{})
 	for k, v := range req {
@@ -247,6 +278,54 @@ func (h *SubscriptionHandler) Update(c *gin.Context) {
 			response.BadRequest(c, "无效的订阅定时规则")
 			return
 		}
+	}
+
+	if _, hasAuthType := updates["auth_type"]; hasAuthType || updates["ssh_key_id"] != nil || updates["auth_token"] != nil {
+		var rawSSHKeyID *uint
+		if value, exists := updates["ssh_key_id"]; exists {
+			switch typed := value.(type) {
+			case nil:
+				rawSSHKeyID = nil
+			case float64:
+				if typed > 0 {
+					id := uint(typed)
+					rawSSHKeyID = &id
+				}
+			}
+		} else {
+			rawSSHKeyID = sub.SSHKeyID
+		}
+
+		authType := sub.EffectiveAuthType()
+		if value, exists := updates["auth_type"]; exists {
+			text, ok := value.(string)
+			if !ok {
+				response.BadRequest(c, "无效的仓库鉴权方式")
+				return
+			}
+			authType = text
+		}
+
+		authToken := sub.AuthToken
+		if value, exists := updates["auth_token"]; exists {
+			text, ok := value.(string)
+			if !ok {
+				response.BadRequest(c, "无效的仓库访问令牌")
+				return
+			}
+			if strings.TrimSpace(text) != "" || sub.EffectiveAuthType() != model.SubAuthTypeToken {
+				authToken = text
+			}
+		}
+
+		normalizedType, normalizedSSHKeyID, normalizedToken, err := normalizeSubscriptionAuthInput(authType, rawSSHKeyID, authToken)
+		if err != nil {
+			response.BadRequest(c, err.Error())
+			return
+		}
+		updates["auth_type"] = normalizedType
+		updates["ssh_key_id"] = normalizedSSHKeyID
+		updates["auth_token"] = normalizedToken
 	}
 
 	if len(updates) > 0 {

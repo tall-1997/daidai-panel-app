@@ -28,7 +28,7 @@ var binaryExtensions = map[string]bool{
 	".ico": true, ".bmp": true, ".webp": true, ".so": true,
 }
 
-var invalidScriptPathCharsPattern = regexp.MustCompile(`[<>:"\\|?*\x00-\x1F]`)
+var invalidScriptPathCharsPattern = regexp.MustCompile(`[<>:"|?*\x00-\x1F]`)
 
 const maxUploadSize = 100 * 1024 * 1024
 

@@ -130,13 +130,13 @@ func (s *SubscriptionScheduler) AddOrUpdateJob(sub *model.Subscription) error {
 		return nil
 	}
 
-	scheduleExpr := toCronSchedule(sub.Schedule)
-	if scheduleExpr == "" {
+	schedule, err := cronu.ParseSchedule(sub.Schedule)
+	if err != nil {
 		return fmt.Errorf("invalid subscription schedule")
 	}
 
 	subID := sub.ID
-	entryID, err := s.cron.AddFunc(scheduleExpr, func() {
+	entryID := s.cron.Schedule(schedule, cron.FuncJob(func() {
 		var latest model.Subscription
 		if err := database.DB.First(&latest, subID).Error; err != nil {
 			log.Printf("subscription %d not found: %v", subID, err)
@@ -148,10 +148,7 @@ func (s *SubscriptionScheduler) AddOrUpdateJob(sub *model.Subscription) error {
 		if _, err := ExecuteSubscriptionPull(&latest, nil); err != nil {
 			log.Printf("subscription %d scheduled pull skipped: %v", subID, err)
 		}
-	})
-	if err != nil {
-		return err
-	}
+	}))
 
 	s.entryMap[sub.ID] = entryID
 	return nil
@@ -197,23 +194,6 @@ func ValidateSubscriptionSchedule(expr string) bool {
 	if expr == "" {
 		return true
 	}
-	return toCronSchedule(expr) != ""
-}
-
-func toCronSchedule(expression string) string {
-	expression = strings.TrimSpace(expression)
-	parts := strings.Fields(expression)
-
-	result := cronu.Parse(expression)
-	if !result.Valid {
-		return ""
-	}
-
-	if len(parts) == 5 {
-		return "0 " + expression
-	}
-	if len(parts) == 6 {
-		return expression
-	}
-	return ""
+	_, err := cronu.ParseSchedule(expr)
+	return err == nil
 }

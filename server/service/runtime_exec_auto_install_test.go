@@ -3,6 +3,7 @@ package service
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -75,6 +76,38 @@ func TestResolveManagedVenvBinUsesExistingScriptsDir(t *testing.T) {
 
 	if got := resolveManagedVenvBin(venvDir); got != scriptsDir {
 		t.Fatalf("expected Scripts dir %q, got %q", scriptsDir, got)
+	}
+}
+
+func TestResolveManagedBinaryPrefersRealWindowsPythonInstallOverWindowsAppsProxy(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("windows-only resolution behavior")
+	}
+
+	root := t.TempDir()
+	windowsAppsDir := filepath.Join(root, "WindowsApps")
+	realPythonDir := filepath.Join(root, "Programs", "Python", "Python314")
+	if err := os.MkdirAll(windowsAppsDir, 0o755); err != nil {
+		t.Fatalf("mkdir windows apps dir: %v", err)
+	}
+	if err := os.MkdirAll(realPythonDir, 0o755); err != nil {
+		t.Fatalf("mkdir real python dir: %v", err)
+	}
+
+	windowsAppsPython := filepath.Join(windowsAppsDir, "python.exe")
+	realPython := filepath.Join(realPythonDir, "python.exe")
+	for _, path := range []string{windowsAppsPython, realPython} {
+		if err := os.WriteFile(path, []byte("stub"), 0o644); err != nil {
+			t.Fatalf("write stub binary %s: %v", path, err)
+		}
+	}
+
+	got, err := resolveManagedBinary("python", []string{realPythonDir}, []string{windowsAppsDir})
+	if err != nil {
+		t.Fatalf("resolve managed binary: %v", err)
+	}
+	if got != realPython {
+		t.Fatalf("expected real python %q, got %q", realPython, got)
 	}
 }
 

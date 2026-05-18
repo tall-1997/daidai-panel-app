@@ -2,9 +2,12 @@ import { loadPanelSettings, type PanelSettingsPayload } from './panelSettings'
 
 export interface PanelAppearanceSettings extends PanelSettingsPayload {}
 
-const DEFAULT_LOG_BACKGROUND_COLOR = '#0f172a'
+const DEFAULT_LOG_BACKGROUND_COLOR_LIGHT = '#f8fafc'
+const DEFAULT_LOG_BACKGROUND_COLOR_DARK = '#0f172a'
 const DEFAULT_EDITOR_BACKGROUND_COLOR = '#111827'
 const DEFAULT_EDITOR_FOREGROUND_COLOR = '#e5e7eb'
+const DEFAULT_LOG_TEXT_COLOR_LIGHT = '#111827'
+const DEFAULT_LOG_TEXT_COLOR_DARK = '#e2e8f0'
 
 function toCSSImageValue(image?: string) {
   const trimmed = image?.trim() || ''
@@ -62,12 +65,24 @@ function getReadableTextColor(background?: string) {
   return luminance < 0.45 ? DEFAULT_EDITOR_FOREGROUND_COLOR : '#111827'
 }
 
+function getDefaultLogBackgroundColor(isDark: boolean) {
+  return isDark ? DEFAULT_LOG_BACKGROUND_COLOR_DARK : DEFAULT_LOG_BACKGROUND_COLOR_LIGHT
+}
+
+function getDefaultLogTextColor(isDark: boolean) {
+  return isDark ? DEFAULT_LOG_TEXT_COLOR_DARK : DEFAULT_LOG_TEXT_COLOR_LIGHT
+}
+
 export function applyPanelAppearance(settings?: PanelAppearanceSettings | null) {
   const root = document.documentElement
+  const isDark = root.classList.contains('dark')
   const editorBackground = settings?.editor_background_color?.trim() || DEFAULT_EDITOR_BACKGROUND_COLOR
+  const logBackground = settings?.log_background_color?.trim() || getDefaultLogBackgroundColor(isDark)
   root.style.setProperty('--dd-editor-bg-color', editorBackground)
   root.style.setProperty('--dd-editor-fg-color', getReadableTextColor(editorBackground))
-  root.style.setProperty('--dd-log-bg-color', settings?.log_background_color?.trim() || DEFAULT_LOG_BACKGROUND_COLOR)
+  root.style.setProperty('--dd-log-bg-color', logBackground)
+  root.style.setProperty('--dd-log-text-color', getReadableTextColor(logBackground) || getDefaultLogTextColor(isDark))
+  root.style.setProperty('--dd-log-theme-mode', isDark ? 'dark' : 'light')
   root.style.setProperty('--dd-log-bg-image', toCSSImageValue(settings?.log_background_image))
 }
 

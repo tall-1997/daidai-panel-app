@@ -90,7 +90,11 @@ func TestPullGitRepoWithCallbackPreserveModeSkipsFalseConflictWhenRepoIsClean(t 
 		ForceOverwrite: &forceOverwrite,
 	}
 
-	output, err := pullGitRepoWithCallback(context.Background(), sub, "", func(string) {})
+	authCfg, err := buildGitAuthConfig(os.Environ(), sub.URL, sub, "")
+	if err != nil {
+		t.Fatalf("build git auth config: %v", err)
+	}
+	output, err := pullGitRepoWithCallback(context.Background(), sub, authCfg, func(string) {})
 	if err != nil {
 		t.Fatalf("initial pull failed: %v\n%s", err, output)
 	}
@@ -102,7 +106,11 @@ func TestPullGitRepoWithCallbackPreserveModeSkipsFalseConflictWhenRepoIsClean(t 
 	runGit(t, worktreeDir, "-c", "user.name=Test User", "-c", "user.email=test@example.com", "commit", "-m", "update")
 	runGit(t, worktreeDir, "push", "origin", "HEAD:main")
 
-	output, err = pullGitRepoWithCallback(context.Background(), sub, "", func(string) {})
+	authCfg, err = buildGitAuthConfig(os.Environ(), sub.URL, sub, "")
+	if err != nil {
+		t.Fatalf("build git auth config for update: %v", err)
+	}
+	output, err = pullGitRepoWithCallback(context.Background(), sub, authCfg, func(string) {})
 	if err != nil {
 		t.Fatalf("preserve-mode update failed: %v\n%s", err, output)
 	}

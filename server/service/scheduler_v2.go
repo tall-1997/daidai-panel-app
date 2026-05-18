@@ -276,15 +276,15 @@ func (s *SchedulerV2) AddJob(task *model.Task) error {
 	taskID := task.ID
 	entryIDs := make([]cron.EntryID, 0, len(expressions))
 	for _, expression := range expressions {
-		cronExpr := toCronV3(expression)
-		if cronExpr == "" {
+		schedule, err := panelcron.ParseSchedule(expression)
+		if err != nil {
 			for _, entryID := range entryIDs {
 				s.cron.Remove(entryID)
 			}
-			return fmt.Errorf("invalid cron expression")
+			return fmt.Errorf("invalid cron expression: %w", err)
 		}
 
-		entryID, err := s.cron.AddFunc(cronExpr, func() {
+		entryID := s.cron.Schedule(schedule, cron.FuncJob(func() {
 			var t model.Task
 			database.DB.First(&t, taskID)
 			req := &ExecutionRequest{
@@ -298,13 +298,7 @@ func (s *SchedulerV2) AddJob(task *model.Task) error {
 				return
 			}
 			database.DB.Model(&model.Task{}).Where("id = ? AND status != ?", taskID, model.TaskStatusRunning).Update("status", model.TaskStatusQueued)
-		})
-		if err != nil {
-			for _, existingID := range entryIDs {
-				s.cron.Remove(existingID)
-			}
-			return err
-		}
+		}))
 		entryIDs = append(entryIDs, entryID)
 	}
 

@@ -58,6 +58,30 @@ func TestBuildNotifyHelperEnvCreatesManagedHelpers(t *testing.T) {
 	}
 }
 
+func TestBuildNotifyHelperEnvUsesAbsoluteHelperPaths(t *testing.T) {
+	testutil.SetupTestEnv(t)
+
+	scriptsDir := filepath.Join(config.C.Data.ScriptsDir, "nested")
+	workDir := filepath.Join(config.C.Data.ScriptsDir, "jobs")
+	if err := os.MkdirAll(scriptsDir, 0o755); err != nil {
+		t.Fatalf("mkdir scripts dir: %v", err)
+	}
+	if err := os.MkdirAll(workDir, 0o755); err != nil {
+		t.Fatalf("mkdir work dir: %v", err)
+	}
+
+	env, err := BuildNotifyHelperEnv(scriptsDir, workDir, config.C.Server.Port, nil, time.Hour)
+	if err != nil {
+		t.Fatalf("build notify helper env: %v", err)
+	}
+
+	for _, key := range []string{"DAIDAI_SCRIPTS_DIR", "DAIDAI_NOTIFY_PY", "DAIDAI_SEND_NOTIFY_JS"} {
+		if !filepath.IsAbs(env[key]) {
+			t.Fatalf("expected %s to be absolute, got %q", key, env[key])
+		}
+	}
+}
+
 func TestEnsureManagedHelperFileRewritesManagedJSFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), sendNotifyJSFilename)
 	if err := os.WriteFile(path, []byte("// "+managedNotifyHelperToken+"\nmodule.exports = {}\n"), 0o644); err != nil {

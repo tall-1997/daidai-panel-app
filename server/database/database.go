@@ -138,6 +138,8 @@ func EnsureColumns() {
 	ensureTableColumns("subscriptions", []columnDef{
 		{"save_dir", "VARCHAR(512) DEFAULT ''"},
 		{"ssh_key_id", "INTEGER"},
+		{"auth_type", "VARCHAR(16) DEFAULT ''"},
+		{"auth_token", "TEXT DEFAULT ''"},
 		{"alias", "VARCHAR(128) DEFAULT ''"},
 		{"auto_add_task", "BOOLEAN DEFAULT 0"},
 		{"auto_del_task", "BOOLEAN DEFAULT 0"},

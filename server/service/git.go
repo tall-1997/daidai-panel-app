@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"daidai-panel/config"
+	"daidai-panel/model"
 )
 
 func GitClone(url, branch, destDir string, sshKeyPath string) (string, error) {
@@ -25,11 +26,15 @@ func GitClone(url, branch, destDir string, sshKeyPath string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = config.C.Data.ScriptsDir
 
-	env, err := appendGitSSHEnv(os.Environ(), sshKeyPath)
+	authCfg, err := buildGitAuthConfig(os.Environ(), url, &model.Subscription{
+		URL:      url,
+		SSHKeyID: nil,
+	}, sshKeyPath)
 	if err != nil {
 		return "", err
 	}
-	cmd.Env = env
+	defer authCfg.CleanupFunc()
+	cmd.Env = authCfg.Env
 
 	output, err := cmd.CombinedOutput()
 	return string(output), err
@@ -39,11 +44,12 @@ func GitPull(repoDir string, sshKeyPath string) (string, error) {
 	cmd := exec.Command("git", "pull")
 	cmd.Dir = repoDir
 
-	env, err := appendGitSSHEnv(os.Environ(), sshKeyPath)
+	authCfg, err := buildGitAuthConfig(os.Environ(), "", &model.Subscription{}, sshKeyPath)
 	if err != nil {
 		return "", err
 	}
-	cmd.Env = env
+	defer authCfg.CleanupFunc()
+	cmd.Env = authCfg.Env
 
 	output, err := cmd.CombinedOutput()
 	return string(output), err

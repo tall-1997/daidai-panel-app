@@ -73,17 +73,21 @@ func Parse(expression string) ParseResult {
 }
 
 func NextRunTimes(expression string, count int) []time.Time {
+	return NextRunTimesFrom(expression, count, time.Now())
+}
+
+func NextRunTimesFrom(expression string, count int, from time.Time) []time.Time {
 	if count <= 0 {
 		return nil
 	}
 
-	schedule, err := parseSchedule(expression)
+	schedule, err := ParseSchedule(expression)
 	if err != nil {
 		return nil
 	}
 
 	times := make([]time.Time, 0, count)
-	next := time.Now()
+	next := from
 	for i := 0; i < count; i++ {
 		next = schedule.Next(next)
 		if next.IsZero() {
@@ -95,6 +99,10 @@ func NextRunTimes(expression string, count int) []time.Time {
 }
 
 func NextRunTimesForExpressions(raw string, count int) []time.Time {
+	return NextRunTimesForExpressionsFrom(raw, count, time.Now())
+}
+
+func NextRunTimesForExpressionsFrom(raw string, count int, from time.Time) []time.Time {
 	if count <= 0 {
 		return nil
 	}
@@ -106,7 +114,7 @@ func NextRunTimesForExpressions(raw string, count int) []time.Time {
 
 	times := make([]time.Time, 0, len(expressions)*count)
 	for _, expression := range expressions {
-		times = append(times, NextRunTimes(expression, count)...)
+		times = append(times, NextRunTimesFrom(expression, count, from)...)
 	}
 
 	sort.Slice(times, func(i, j int) bool {
@@ -146,6 +154,10 @@ func parserForParts(parts []string) (robfigcron.Parser, bool, error) {
 }
 
 func parseSchedule(expression string) (robfigcron.Schedule, error) {
+	return ParseSchedule(expression)
+}
+
+func ParseSchedule(expression string) (robfigcron.Schedule, error) {
 	expression = strings.TrimSpace(expression)
 	parts := strings.Fields(expression)
 	parser, _, err := parserForParts(parts)

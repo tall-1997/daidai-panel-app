@@ -75,7 +75,10 @@ const editForm = ref({
   auto_del_task: false,
   save_dir: '',
   sub_path: '',
+  auth_type: '' as '' | 'ssh' | 'token',
   ssh_key_id: null as number | null,
+  auth_token: '',
+  has_auth_token: false,
   alias: '',
   force_overwrite: true
 })
@@ -170,7 +173,7 @@ function openCreate() {
   editForm.value = {
     id: 0, name: '', type: 'git-repo', url: '', branch: '', schedule: '',
     whitelist: '', blacklist: '', depend_on: '', hook_script: '', auto_add_task: false,
-    auto_del_task: false, save_dir: '', sub_path: '', ssh_key_id: null, alias: '',
+    auto_del_task: false, save_dir: '', sub_path: '', auth_type: '', ssh_key_id: null, auth_token: '', has_auth_token: false, alias: '',
     force_overwrite: true
   }
   showEditDialog.value = true
@@ -335,7 +338,8 @@ function openEdit(row: any) {
     whitelist: row.whitelist || '', blacklist: row.blacklist || '',
     depend_on: row.depend_on || '', hook_script: row.hook_script || '', auto_add_task: row.auto_add_task,
     auto_del_task: row.auto_del_task, save_dir: row.save_dir || '', sub_path: row.sub_path || '',
-    ssh_key_id: row.ssh_key_id, alias: row.alias || '',
+    auth_type: row.auth_type || '',
+    ssh_key_id: row.ssh_key_id, auth_token: '', has_auth_token: !!row.has_auth_token, alias: row.alias || '',
     force_overwrite: row.force_overwrite !== false
   }
   showEditDialog.value = true
@@ -361,6 +365,19 @@ async function handleSave() {
   }
   try {
     const data = { ...editForm.value }
+    if (data.type !== 'git-repo') {
+      data.auth_type = ''
+      data.ssh_key_id = null
+      data.auth_token = ''
+    } else if (data.auth_type === 'ssh') {
+      data.auth_token = ''
+    } else if (data.auth_type === 'token') {
+      data.ssh_key_id = null
+    } else {
+      data.ssh_key_id = null
+      data.auth_token = ''
+    }
+    delete (data as any).has_auth_token
     if (isCreate.value) {
       await subscriptionApi.create(data)
       ElMessage.success('创建成功')
@@ -880,13 +897,34 @@ function viewLogDetail(log: any) {
             留空拉取全部内容，填写后仅检出指定子目录（如 scripts/daily, utils）
           </div>
         </el-form-item>
+        <el-form-item v-if="editForm.type === 'git-repo'" label="仓库鉴权">
+          <el-radio-group v-model="editForm.auth_type">
+            <el-radio value="">无鉴权</el-radio>
+            <el-radio value="ssh">SSH 密钥</el-radio>
+            <el-radio value="token">Access Token</el-radio>
+          </el-radio-group>
+          <div style="color: var(--el-text-color-secondary); font-size: 12px; margin-top: 4px; line-height: 1.4">
+            私有仓库推荐使用权限更可控的 Token；公开仓库可留空。
+          </div>
+        </el-form-item>
         <el-form-item label="别名">
           <el-input v-model="editForm.alias" placeholder="目录/文件别名" />
         </el-form-item>
-        <el-form-item v-if="editForm.type === 'git-repo'" label="SSH 密钥">
+        <el-form-item v-if="editForm.type === 'git-repo' && editForm.auth_type === 'ssh'" label="SSH 密钥">
           <el-select v-model="editForm.ssh_key_id" placeholder="选择 SSH 密钥 (可选)" clearable style="width: 100%">
             <el-option v-for="key in sshKeys" :key="key.id" :label="key.name" :value="key.id" />
           </el-select>
+        </el-form-item>
+        <el-form-item v-if="editForm.type === 'git-repo' && editForm.auth_type === 'token'" label="Access Token">
+          <el-input
+            v-model="editForm.auth_token"
+            type="password"
+            show-password
+            :placeholder="editForm.has_auth_token ? '留空则保持当前已保存 Token' : '粘贴 Git 平台访问令牌'"
+          />
+          <div style="color: var(--el-text-color-secondary); font-size: 12px; margin-top: 4px; line-height: 1.4">
+            {{ editForm.has_auth_token ? '当前已保存 Token。若不需要更新，保持留空即可。' : '建议使用仅仓库读取权限的 Token。' }}
+          </div>
         </el-form-item>
         <el-form-item label="白名单">
           <el-input v-model="editForm.whitelist" placeholder="文件名白名单 (逗号分隔)" />

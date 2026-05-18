@@ -55,7 +55,11 @@ func TestPullGitRepoWithCallbackConvertsExistingNonGitDirectoryInPlace(t *testin
 		t.Fatalf("write old file: %v", err)
 	}
 
-	output, err := pullGitRepoWithCallback(context.Background(), sub, "", func(string) {})
+	authCfg, err := buildGitAuthConfig(os.Environ(), sub.URL, sub, "")
+	if err != nil {
+		t.Fatalf("build git auth config: %v", err)
+	}
+	output, err := pullGitRepoWithCallback(context.Background(), sub, authCfg, func(string) {})
 	if err != nil {
 		t.Fatalf("pull git repo with existing dir: %v\n%s", err, output)
 	}

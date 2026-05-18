@@ -60,9 +60,9 @@ defineProps<{
         <label>日志背景颜色</label>
         <div class="log-bg-controls">
           <el-color-picker v-model="form.log_background_color" show-alpha @change="onAppearancePreview" />
-          <el-input v-model="form.log_background_color" placeholder="#0f172a" @change="onAppearancePreview" />
+          <el-input v-model="form.log_background_color" placeholder="留空跟随当前主题" @change="onAppearancePreview" />
         </div>
-        <span class="form-hint">统一应用到任务日志和执行日志查看器，建议使用深色以保证文本可读性</span>
+        <span class="form-hint">统一应用到任务日志和执行日志查看器，留空时浅色模式为浅底深字，深色模式为深底浅字</span>
       </div>
       <div class="form-field">
         <label>日志背景图片</label>
@@ -87,9 +87,9 @@ defineProps<{
         <div
           class="log-bg-preview dd-log-surface"
           :style="{
-            backgroundColor: form.log_background_color || '#0f172a',
+            backgroundColor: form.log_background_color || undefined,
             backgroundImage: form.log_background_image
-              ? `radial-gradient(circle at top right, rgba(148, 163, 184, 0.16), transparent 24%), linear-gradient(155deg, rgba(15, 23, 42, 0.88), rgba(30, 41, 59, 0.76)), url('${form.log_background_image}')`
+              ? `radial-gradient(circle at top right, color-mix(in srgb, var(--dd-log-text-color) 10%, transparent), transparent 24%), linear-gradient(155deg, color-mix(in srgb, var(--dd-log-bg-color) 96%, white), color-mix(in srgb, var(--dd-log-bg-color) 88%, var(--dd-log-text-color) 8%)), url('${form.log_background_image}')`
               : undefined
           }"
         >

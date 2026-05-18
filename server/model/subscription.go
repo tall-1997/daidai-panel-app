@@ -1,12 +1,15 @@
 package model
 
 import (
+	"strings"
 	"time"
 )
 
 const (
 	SubTypeSingleFile = "single-file"
 	SubTypeGitRepo    = "git-repo"
+	SubAuthTypeSSH    = "ssh"
+	SubAuthTypeToken  = "token"
 )
 
 type Subscription struct {
@@ -27,11 +30,13 @@ type Subscription struct {
 	LastPullAt  *time.Time `json:"last_pull_at"`
 	SaveDir     string     `gorm:"size:512;default:''" json:"save_dir"`
 	SSHKeyID    *uint      `json:"ssh_key_id"`
-	SubPath        string     `gorm:"size:512;default:''" json:"sub_path"`
-	Alias          string     `gorm:"size:128;default:''" json:"alias"`
-	ForceOverwrite *bool      `gorm:"default:true" json:"force_overwrite"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	AuthType    string     `gorm:"size:16;default:''" json:"auth_type"`
+	AuthToken   string     `gorm:"type:text;default:''" json:"-"`
+	SubPath     string     `gorm:"size:512;default:''" json:"sub_path"`
+	Alias       string     `gorm:"size:128;default:''" json:"alias"`
+	ForceOverwrite *bool   `gorm:"default:true" json:"force_overwrite"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
 func (Subscription) TableName() string {
@@ -40,29 +45,67 @@ func (Subscription) TableName() string {
 
 func (s *Subscription) ToDict() map[string]interface{} {
 	return map[string]interface{}{
-		"id":            s.ID,
-		"name":          s.Name,
-		"type":          s.Type,
-		"url":           s.URL,
-		"branch":        s.Branch,
-		"schedule":      s.Schedule,
-		"whitelist":     s.Whitelist,
-		"blacklist":     s.Blacklist,
-		"depend_on":     s.DependOn,
-		"hook_script":   s.HookScript,
-		"auto_add_task": s.AutoAddTask,
-		"auto_del_task": s.AutoDelTask,
-		"enabled":       s.Enabled,
-		"status":        s.Status,
-		"last_pull_at":  s.LastPullAt,
+		"id":              s.ID,
+		"name":            s.Name,
+		"type":            s.Type,
+		"url":             s.URL,
+		"branch":          s.Branch,
+		"schedule":        s.Schedule,
+		"whitelist":       s.Whitelist,
+		"blacklist":       s.Blacklist,
+		"depend_on":       s.DependOn,
+		"hook_script":     s.HookScript,
+		"auto_add_task":   s.AutoAddTask,
+		"auto_del_task":   s.AutoDelTask,
+		"enabled":         s.Enabled,
+		"status":          s.Status,
+		"last_pull_at":    s.LastPullAt,
 		"sub_path":        s.SubPath,
 		"save_dir":        s.SaveDir,
 		"ssh_key_id":      s.SSHKeyID,
+		"auth_type":       s.EffectiveAuthType(),
+		"has_auth_token":  s.HasAuthToken(),
 		"alias":           s.Alias,
 		"force_overwrite": s.ForceOverwrite == nil || *s.ForceOverwrite,
 		"created_at":      s.CreatedAt,
 		"updated_at":      s.UpdatedAt,
 	}
+}
+
+func NormalizeSubscriptionAuthType(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "":
+		return ""
+	case SubAuthTypeSSH:
+		return SubAuthTypeSSH
+	case SubAuthTypeToken:
+		return SubAuthTypeToken
+	default:
+		return ""
+	}
+}
+
+func (s *Subscription) HasAuthToken() bool {
+	if s == nil {
+		return false
+	}
+	return strings.TrimSpace(s.AuthToken) != ""
+}
+
+func (s *Subscription) EffectiveAuthType() string {
+	if s == nil {
+		return ""
+	}
+	if normalized := NormalizeSubscriptionAuthType(s.AuthType); normalized != "" {
+		return normalized
+	}
+	if s.HasAuthToken() {
+		return SubAuthTypeToken
+	}
+	if s.SSHKeyID != nil && *s.SSHKeyID > 0 {
+		return SubAuthTypeSSH
+	}
+	return ""
 }
 
 type SubLog struct {

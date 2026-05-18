@@ -563,6 +563,12 @@ func BuildNotifyHelperEnv(scriptsDir string, workDir string, serverPort int, def
 	if ttl <= 0 {
 		ttl = 2 * time.Hour
 	}
+	if absScriptsDir, err := filepath.Abs(strings.TrimSpace(scriptsDir)); err == nil {
+		scriptsDir = absScriptsDir
+	}
+	if absWorkDir, err := filepath.Abs(strings.TrimSpace(workDir)); err == nil {
+		workDir = absWorkDir
+	}
 	if err := EnsureBuiltinNotifyHelpers(scriptsDir); err != nil {
 		return nil, err
 	}
