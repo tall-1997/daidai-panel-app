@@ -477,7 +477,18 @@ func writeTempSSHKey(privateKey string) (string, error) {
 }
 
 var (
-	cronCommentRe          = regexp.MustCompile(`(?im)^\s*#?\s*cron\s*[:：]\s*(.+)$`)
+	// 兼容多种 cron 声明前缀：
+	//   cron: 30 8 * * *
+	//   # cron: 30 8 * * *
+	//   #cron 8 9,10,11 * * *
+	//   cron 0 12 * * *
+	//   * cron 8 10 * * *           (JSDoc 块注释每行的 `*` 前缀)
+	//   * cron: 12 8 * * *
+	//   @cron: 30 8 * * *           (JSDoc `@cron` 标签)
+	//   * @cron 0 0 * * *
+	//   // cron: 0 0 * * *
+	// 通过 `\b` 词界避免误匹配 `crontab` / `cron-utils` 等关键字。
+	cronLabelPrefixRe      = regexp.MustCompile(`(?im)^[\s#*@/]*@?cron\b\s*[:：]?\s*(\S.*)$`)
 	subscriptionTaskNameRe = regexp.MustCompile(`new\s+Env\s*\(\s*['"` + "`" + `]([^'"` + "`" + `]+)['"` + "`" + `]\s*\)`)
 	// 青龙风格 `cron "EXPR" filename, tag:xxx` 单行声明，常见于 JS 顶部注释。
 	// 例如：cron "6 6 6 6 *" jd_CheckCK.js, tag:京东CK检测by-ccwav
@@ -824,11 +835,8 @@ func resolveSubscriptionTaskName(path, fallback string) string {
 }
 
 func extractSubscriptionCronExpression(line, scriptBase string) string {
-	if matches := cronCommentRe.FindStringSubmatch(line); len(matches) > 1 {
-		expr := strings.TrimSpace(matches[1])
-		if cron.Parse(expr).Valid {
-			return expr
-		}
+	if expr := extractSubscriptionCronExpressionFromLabel(line); expr != "" {
+		return expr
 	}
 
 	if matches := cronDirectiveLineRe.FindStringSubmatch(line); len(matches) > 2 && scriptBase != "" {
@@ -842,6 +850,36 @@ func extractSubscriptionCronExpression(line, scriptBase string) string {
 	}
 
 	return extractSubscriptionCronExpressionFromFilenameLine(line, scriptBase)
+}
+
+// extractSubscriptionCronExpressionFromLabel 处理“cron”标签开头的行，
+// 兼容 `cron:`、`cron`（无冒号）、JSDoc `* cron`、`@cron:` 等多种写法。
+// 当行尾跟随文件名提示（例如 `cron 8 10 * * *  qtx.js`）时，只截取前 5 或 6 个字段做 cron。
+func extractSubscriptionCronExpressionFromLabel(line string) string {
+	matches := cronLabelPrefixRe.FindStringSubmatch(line)
+	if len(matches) < 2 {
+		return ""
+	}
+	rest := strings.TrimSpace(matches[1])
+	if rest == "" {
+		return ""
+	}
+
+	if cron.Parse(rest).Valid {
+		return rest
+	}
+
+	fields := strings.Fields(rest)
+	for _, cnt := range []int{6, 5} {
+		if len(fields) < cnt {
+			continue
+		}
+		expr := strings.Join(fields[:cnt], " ")
+		if cron.Parse(expr).Valid {
+			return expr
+		}
+	}
+	return ""
 }
 
 func extractSubscriptionCronExpressionFromFilenameLine(line, scriptBase string) string {

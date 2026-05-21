@@ -148,3 +148,145 @@ print('hello')
 		t.Fatalf("expected cron from docstring header, got %q", got)
 	}
 }
+
+// QLScriptPublic 真实样例：JSDoc 块注释每行 `*` 前缀 + 紧跟同名文件，
+// 例：`* cron 11 8 * * *  sysxc.js`（backup/sysxc.js）。
+func TestResolveCronForSubscriptionTaskSupportsJSDocStarCronWithFilename(t *testing.T) {
+	root := t.TempDir()
+	scriptPath := filepath.Join(root, "sysxc.js")
+	content := "/**\n * 书亦烧仙草\n * cron 11 8 * * *  sysxc.js\n * 23/04/15 内部使用\n */\nconst $ = new Env(\"书亦烧仙草\");\n"
+	if err := os.WriteFile(scriptPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	got := resolveCronForSubscriptionTask(scriptPath, "")
+	if got != "11 8 * * *" {
+		t.Fatalf("expected cron from JSDoc star header, got %q", got)
+	}
+}
+
+// QLScriptPublic 真实样例：JSDoc `*` 前缀但无尾随文件名，
+// 例：`* cron 8 10 * * *`（daily/ydyp.js）。
+func TestResolveCronForSubscriptionTaskSupportsJSDocStarCronWithoutFilename(t *testing.T) {
+	root := t.TempDir()
+	scriptPath := filepath.Join(root, "ydyp.js")
+	content := "/**\n * new Env(\"中国移动云盘\")\n * 变量名ydyp_ck\n * cron 8 10 * * *\n */\n"
+	if err := os.WriteFile(scriptPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	got := resolveCronForSubscriptionTask(scriptPath, "")
+	if got != "8 10 * * *" {
+		t.Fatalf("expected cron from bare JSDoc star, got %q", got)
+	}
+}
+
+// QLScriptPublic 真实样例：`#cron <expr>`（井号且无冒号），
+// 例：`#cron 8 9,10,11 * * *`（daily/BREO.py）。
+func TestResolveCronForSubscriptionTaskSupportsHashCronWithoutColon(t *testing.T) {
+	root := t.TempDir()
+	scriptPath := filepath.Join(root, "BREO.py")
+	content := "#by:哆啦A梦\n#cron 8 9,10,11 * * *\nprint('hi')\n"
+	if err := os.WriteFile(scriptPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	got := resolveCronForSubscriptionTask(scriptPath, "")
+	if got != "8 9,10,11 * * *" {
+		t.Fatalf("expected cron from #cron header without colon, got %q", got)
+	}
+}
+
+// QLScriptPublic 真实样例：Python docstring 中 `cron <expr>`（无注释符号、无冒号），
+// 例：`cron 0 12 * * *`（daily/sfsy.py）。
+func TestResolveCronForSubscriptionTaskSupportsBareCronWithoutColon(t *testing.T) {
+	root := t.TempDir()
+	scriptPath := filepath.Join(root, "sfsy.py")
+	content := "\"\"\"\n顺丰速运日常积分任务\ncron 0 12 * * *\n\"\"\"\nprint('hi')\n"
+	if err := os.WriteFile(scriptPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	got := resolveCronForSubscriptionTask(scriptPath, "")
+	if got != "0 12 * * *" {
+		t.Fatalf("expected cron from bare `cron` header, got %q", got)
+	}
+}
+
+// QLScriptPublic 真实样例：`@cron:` JSDoc 风格标签，
+// 例：`@cron: 30 8 * * *`（daily/yht.js）。
+func TestResolveCronForSubscriptionTaskSupportsAtCronTag(t *testing.T) {
+	root := t.TempDir()
+	scriptPath := filepath.Join(root, "yht.js")
+	content := "/*\n@Description:  益禾堂\n@cron: 30 8 * * *\n*/\nconst $ = new Env(\"益禾堂\");\n"
+	if err := os.WriteFile(scriptPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	got := resolveCronForSubscriptionTask(scriptPath, "")
+	if got != "30 8 * * *" {
+		t.Fatalf("expected cron from @cron tag, got %q", got)
+	}
+}
+
+// QLScriptPublic 真实样例：JSDoc 行尾跟随不匹配的文件名（脚本作者笔误），
+// 例：jlld.js 内写着 `* cron 27 17 * * *  leidacar.js`，仍应识别 cron。
+func TestResolveCronForSubscriptionTaskJSDocCronAcceptsMismatchedFilenameHint(t *testing.T) {
+	root := t.TempDir()
+	scriptPath := filepath.Join(root, "jlld.js")
+	content := "/**\n * new Env('jlld')\n * cron 27 17 * * *  leidacar.js\n */\n"
+	if err := os.WriteFile(scriptPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	got := resolveCronForSubscriptionTask(scriptPath, "")
+	if got != "27 17 * * *" {
+		t.Fatalf("expected cron from JSDoc header even when trailing filename mismatches, got %q", got)
+	}
+}
+
+// 防御性回归：纯中文叙述中包含 "cron" 单词时不应被误判为 cron 表达式，
+// 例：`2. cron 以防ocr识别出错每天运行两次左右`（backup/sysxc.py）。
+func TestResolveCronForSubscriptionTaskIgnoresChineseProseMentioningCron(t *testing.T) {
+	root := t.TempDir()
+	scriptPath := filepath.Join(root, "sysxc.py")
+	content := "\"\"\"\n2. cron 以防ocr识别出错每天运行两次左右\n3. ddddocr搭建方法...\n\"\"\"\n"
+	if err := os.WriteFile(scriptPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	got := resolveCronForSubscriptionTask(scriptPath, "0 0 * * *")
+	if got != "0 0 * * *" {
+		t.Fatalf("expected fallback cron when only Chinese prose mentions cron, got %q", got)
+	}
+}
+
+// jdpro 真实样例：`cron:` 后无空格紧贴数字，例：`cron:39 7 * * *`（jd_daka_bean.js）。
+func TestResolveCronForSubscriptionTaskSupportsColonWithoutSpace(t *testing.T) {
+	root := t.TempDir()
+	scriptPath := filepath.Join(root, "jd_daka_bean.js")
+	content := "/*\n京豆打卡\ncron:39 7 * * *\n*/\nconst $ = new Env(\"京豆打卡\");\n"
+	if err := os.WriteFile(scriptPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	got := resolveCronForSubscriptionTask(scriptPath, "")
+	if got != "39 7 * * *" {
+		t.Fatalf("expected cron from colon-without-space header, got %q", got)
+	}
+}
+
+// 防御性回归：不应被 `crontab` / `cron-utils` 等关键词误匹配。
+func TestResolveCronForSubscriptionTaskIgnoresCronKeywordWithoutBoundary(t *testing.T) {
+	root := t.TempDir()
+	scriptPath := filepath.Join(root, "main.js")
+	content := "// crontab is a tool, see https://crontab.guru\n// cron-utils 0 0 * * *\nconsole.log('hi');\n"
+	if err := os.WriteFile(scriptPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	got := resolveCronForSubscriptionTask(scriptPath, "0 0 * * *")
+	if got != "0 0 * * *" {
+		t.Fatalf("expected fallback cron for non-cron keywords, got %q", got)
+	}
+}
