@@ -324,7 +324,6 @@ func pullGitRepoWithCallback(ctx context.Context, sub *model.Subscription, authC
 				return fullOutput.String(), err
 			}
 
-			forceOverwrite := sub.ForceOverwrite == nil || *sub.ForceOverwrite
 			emit("[覆盖更新本地文件] 正在用远端最新提交覆盖当前脚本目录内容")
 			cmd = exec.CommandContext(ctx, "git", "reset", "--hard", "FETCH_HEAD")
 			cmd.Dir = destDir

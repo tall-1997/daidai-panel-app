@@ -95,7 +95,6 @@ func compactGINLogLine(line string) (string, bool) {
 	}
 
 	statusCode := strings.TrimSpace(match[1])
-	latency := normalizeGINLatency(match[2])
 	clientIP := strings.TrimSpace(match[3])
 	method := strings.TrimSpace(match[4])
 	path := strings.TrimSpace(match[5])
