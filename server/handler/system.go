@@ -601,7 +601,7 @@ func (h *SystemHandler) GetConfigScript(c *gin.Context) {
 			response.Success(c, gin.H{"content": "", "path": "config.sh"})
 			return
 		}
-		response.ServerError(c, "读取配置文件失败")
+		response.InternalError(c, "读取配置文件失败")
 		return
 	}
 	response.Success(c, gin.H{"content": string(data), "path": "config.sh"})
@@ -617,7 +617,7 @@ func (h *SystemHandler) SaveConfigScript(c *gin.Context) {
 	}
 	filePath := filepath.Join(config.C.Data.Dir, "config.sh")
 	if err := os.WriteFile(filePath, []byte(req.Content), 0755); err != nil {
-		response.ServerError(c, "保存配置文件失败")
+		response.InternalError(c, "保存配置文件失败")
 		return
 	}
 	response.Success(c, gin.H{"message": "配置文件已保存"})
