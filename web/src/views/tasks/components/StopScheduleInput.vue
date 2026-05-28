@@ -101,8 +101,11 @@ function addRule(afterIndex = rules.value.length - 1) {
 
 function removeRule(index: number) {
   if (rules.value.length <= 1) {
-    rules.value[0].expression = ''
-    rules.value[0].parseResult = null
+    const first = rules.value[0]
+    if (first) {
+      first.expression = ''
+      first.parseResult = null
+    }
     emitRules()
     return
   }
