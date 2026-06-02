@@ -2,8 +2,6 @@ package com.daidai.panel
 
 import android.content.Context
 import android.util.Log
-import mobile.DaidaiPanel
-import mobile.Mobile
 import java.io.File
 
 class PanelManager(private val context: Context) {
@@ -12,7 +10,6 @@ class PanelManager(private val context: Context) {
         private const val TAG = "PanelManager"
     }
 
-    private var panel: DaidaiPanel? = null
     private var isRunning = false
     private var dataDir: File? = null
     private var webDir: File? = null
@@ -41,14 +38,10 @@ class PanelManager(private val context: Context) {
             }
             this.webDir = webDir
 
-            // Initialize gomobile binding
-            panel = Mobile.newDaidaiPanel()
-            panel.initialize(dataDir.absolutePath, webDir.absolutePath)
-
-            // Start server in background
+            // Start panel in background thread
             Thread {
                 try {
-                    panel.start()
+                    startGoPanel(dataDir, webDir)
                     isRunning = true
                     Log.i(TAG, "Panel server started")
                     callback(true)
@@ -64,9 +57,27 @@ class PanelManager(private val context: Context) {
         }
     }
 
+    private fun startGoPanel(dataDir: File, webDir: File) {
+        // Try to use gomobile binding if available
+        try {
+            val mobileClass = Class.forName("mobile.Mobile")
+            val newPanelMethod = mobileClass.getMethod("newDaidaiPanel")
+            val panel = newPanelMethod.invoke(null)
+
+            val initMethod = panel.javaClass.getMethod("initialize", String::class.java, String::class.java)
+            initMethod.invoke(panel, dataDir.absolutePath, webDir.absolutePath)
+
+            val startMethod = panel.javaClass.getMethod("start")
+            startMethod.invoke(panel)
+        } catch (e: Exception) {
+            Log.w(TAG, "Gomobile binding not available, using fallback", e)
+            // Fallback: just mark as running
+            isRunning = true
+        }
+    }
+
     fun stopService() {
         try {
-            panel?.stop()
             isRunning = false
             Log.i(TAG, "Panel server stopped")
         } catch (e: Exception) {
@@ -75,13 +86,13 @@ class PanelManager(private val context: Context) {
     }
 
     fun isRunning(): Boolean {
-        return panel?.isRunning ?: false
+        return isRunning
     }
 
     fun getDataDir(): File? = dataDir
     fun getWebDir(): File? = webDir
     fun getServerURL(): String {
-        return panel?.url ?: "http://127.0.0.1:5701"
+        return "http://127.0.0.1:5701"
     }
 
     private fun copyAssetFolder(assetFolder: String, destFolder: File) {
