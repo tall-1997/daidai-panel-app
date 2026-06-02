@@ -143,17 +143,17 @@ class PanelManager(private val context: Context) : DefaultLifecycleObserver {
     }
 
     override fun onStart(owner: LifecycleOwner) {
-        super.onStart()
+        super.onStart(owner)
         Log.d(TAG, "App in foreground")
     }
 
     override fun onStop(owner: LifecycleOwner) {
-        super.onStop()
+        super.onStop(owner)
         Log.d(TAG, "App in background")
     }
 
     override fun onDestroy(owner: LifecycleOwner) {
-        super.onDestroy()
+        super.onDestroy(owner)
         Log.d(TAG, "App destroyed")
     }
 }
