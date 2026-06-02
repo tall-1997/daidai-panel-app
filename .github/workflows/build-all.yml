@@ -146,13 +146,15 @@ jobs:
           gomobile bind -target=ios -iosversion=16.0 -o ../ios/DaidaiPanel/DaidaiPanel.xcframework ./mobile
 
       - name: Import Code Signing Certificate
-        if: ${{ secrets.IOS_CERTIFICATE_P12 != '' }}
+        if: env.IOS_CERTIFICATE_P12 != ''
         uses: apple-actions/import-codesign-certs@v2
         with:
           p12-file-base64: ${{ secrets.IOS_CERTIFICATE_P12 }}
           p12-password: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+        env:
+          IOS_CERTIFICATE_P12: ${{ secrets.IOS_CERTIFICATE_P12 }}
 
-      - name: Build iOS App
+      - name: Build iOS App (Archive)
         run: |
           cd ios/DaidaiPanel
           xcodebuild -scheme DaidaiPanel \
@@ -161,7 +163,8 @@ jobs:
             -archivePath $PWD/build/DaidaiPanel.xcarchive \
             archive
 
-      - name: Export IPA
+      - name: Export IPA (Signed)
+        if: env.IOS_CERTIFICATE_P12 != ''
         run: |
           cd ios/DaidaiPanel
           cat > ExportOptions.plist << EOF
@@ -185,15 +188,32 @@ jobs:
             -archivePath $PWD/build/DaidaiPanel.xcarchive \
             -exportPath $PWD/build/export \
             -exportOptionsPlist ExportOptions.plist
+        env:
+          IOS_CERTIFICATE_P12: ${{ secrets.IOS_CERTIFICATE_P12 }}
 
-      - name: Upload IPA artifact
+      - name: Prepare unsigned archive
+        if: env.IOS_CERTIFICATE_P12 == ''
+        run: |
+          mkdir -p ios/DaidaiPanel/build/export
+          cd ios/DaidaiPanel/build
+          zip -r export/DaidaiPanel.xcframework.zip DaidaiPanel.xcframework || true
+          echo "No signing certificate configured. Archive only (xcframework.zip)." > export/README.txt
+          cp -r DaidaiPanel.xcarchive export/ 2>/dev/null || true
+        env:
+          IOS_CERTIFICATE_P12: ${{ secrets.IOS_CERTIFICATE_P12 }}
+
+      - name: Upload iOS artifact
         uses: actions/upload-artifact@v4
         with:
           name: daidai-panel-ios-${{ env.APP_VERSION }}
-          path: ios/DaidaiPanel/build/export/*.ipa
+          path: |
+            ios/DaidaiPanel/build/export/*.ipa
+            ios/DaidaiPanel/build/export/*.xcframework.zip
+            ios/DaidaiPanel/build/export/*.xcarchive
+            ios/DaidaiPanel/build/export/README.txt
           retention-days: 30
 
-  # Create Release
+  # Create Release (Android required, iOS optional)
   release:
     needs: [build-android, build-ios]
     runs-on: ubuntu-latest
@@ -209,6 +229,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: daidai-panel-ios-${{ env.APP_VERSION }}
+        continue-on-error: true
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -216,6 +237,8 @@ jobs:
           files: |
             *.apk
             *.ipa
+            *.xcframework.zip
+            *.xcarchive
           draft: false
           prerelease: false
           generate_release_notes: true
