@@ -144,6 +144,15 @@ jobs:
           go get golang.org/x/mobile/cmd/gobind
           gomobile bind -target=ios -iosversion=16.0 -o ../ios/DaidaiPanel/DaidaiPanel.xcframework ./mobile
 
+      - name: Verify xcframework
+        run: |
+          echo "=== xcframework contents ==="
+          ls -la ios/DaidaiPanel/DaidaiPanel.xcframework/
+          echo "=== Info.plist ==="
+          cat ios/DaidaiPanel/DaidaiPanel.xcframework/Info.plist
+          echo "=== Framework modules ==="
+          find ios/DaidaiPanel/DaidaiPanel.xcframework -name "*.swiftmodule" -o -name "module.modulemap" | head -20
+
       - name: Import Code Signing Certificate
         if: env.IOS_CERTIFICATE_P12 != ''
         uses: apple-actions/import-codesign-certs@v2
