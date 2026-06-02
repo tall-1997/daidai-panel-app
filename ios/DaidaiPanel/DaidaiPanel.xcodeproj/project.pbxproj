@@ -14,6 +14,7 @@
 		A1234567890ABCDEF0000009 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF0000010 /* Assets.xcassets */; };
 		A1234567890ABCDEF0000013 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF0000014 /* LaunchScreen.storyboard */; };
 		A1234567890ABCDEF0000030 /* PanelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF0000031 /* PanelManager.swift */; };
+		A1234567890ABCDEF0000032 /* Mobile.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF0000033 /* Mobile.xcframework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -26,6 +27,7 @@
 		A1234567890ABCDEF0000014 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		A1234567890ABCDEF0000015 /* DaidaiPanel.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DaidaiPanel.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1234567890ABCDEF0000031 /* PanelManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelManager.swift; sourceTree = "<group>"; };
+		A1234567890ABCDEF0000033 /* Mobile.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = Mobile.xcframework; path = DaidaiPanel.xcframework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -33,6 +35,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A1234567890ABCDEF0000032 /* Mobile.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -54,6 +57,7 @@
 				A1234567890ABCDEF0000004 /* SceneDelegate.swift */,
 				A1234567890ABCDEF0000006 /* ViewController.swift */,
 				A1234567890ABCDEF0000031 /* PanelManager.swift */,
+				A1234567890ABCDEF0000033 /* Mobile.xcframework */,
 				A1234567890ABCDEF0000008 /* Main.storyboard */,
 				A1234567890ABCDEF0000010 /* Assets.xcassets */,
 				A1234567890ABCDEF0000012 /* Info.plist */,
@@ -277,6 +281,10 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/DaidaiPanel",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DaidaiPanel/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "呆呆面板";
@@ -307,6 +315,10 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/DaidaiPanel",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DaidaiPanel/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "呆呆面板";
