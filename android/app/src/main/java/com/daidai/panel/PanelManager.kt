@@ -2,6 +2,8 @@ package com.daidai.panel
 
 import android.content.Context
 import android.util.Log
+import mobile.DaidaiPanel
+import mobile.Mobile
 import java.io.File
 
 class PanelManager(private val context: Context) {
@@ -40,13 +42,13 @@ class PanelManager(private val context: Context) {
             this.webDir = webDir
 
             // Initialize gomobile binding
-            panel = DaidaiPanel()
-            panel?.initialize(dataDir.absolutePath, webDir.absolutePath)
+            panel = Mobile.newDaidaiPanel()
+            panel.initialize(dataDir.absolutePath, webDir.absolutePath)
 
             // Start server in background
             Thread {
                 try {
-                    panel?.start()
+                    panel.start()
                     isRunning = true
                     Log.i(TAG, "Panel server started")
                     callback(true)
