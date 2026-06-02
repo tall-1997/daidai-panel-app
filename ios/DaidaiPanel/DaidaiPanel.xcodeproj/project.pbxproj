@@ -13,6 +13,7 @@
 		A1234567890ABCDEF0000007 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF0000008 /* Main.storyboard */; };
 		A1234567890ABCDEF0000009 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF0000010 /* Assets.xcassets */; };
 		A1234567890ABCDEF0000013 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF0000014 /* LaunchScreen.storyboard */; };
+		A1234567890ABCDEF0000030 /* PanelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF0000031 /* PanelManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -24,6 +25,7 @@
 		A1234567890ABCDEF0000012 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A1234567890ABCDEF0000014 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		A1234567890ABCDEF0000015 /* DaidaiPanel.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DaidaiPanel.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1234567890ABCDEF0000031 /* PanelManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -51,6 +53,7 @@
 				A1234567890ABCDEF0000002 /* AppDelegate.swift */,
 				A1234567890ABCDEF0000004 /* SceneDelegate.swift */,
 				A1234567890ABCDEF0000006 /* ViewController.swift */,
+				A1234567890ABCDEF0000031 /* PanelManager.swift */,
 				A1234567890ABCDEF0000008 /* Main.storyboard */,
 				A1234567890ABCDEF0000010 /* Assets.xcassets */,
 				A1234567890ABCDEF0000012 /* Info.plist */,
@@ -141,6 +144,7 @@
 				A1234567890ABCDEF0000001 /* AppDelegate.swift in Sources */,
 				A1234567890ABCDEF0000003 /* SceneDelegate.swift in Sources */,
 				A1234567890ABCDEF0000005 /* ViewController.swift in Sources */,
+				A1234567890ABCDEF0000030 /* PanelManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
