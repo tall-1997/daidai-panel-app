@@ -86,10 +86,21 @@ jobs:
       - name: Build Android APK
         run: |
           cd android
-          # Download gradle wrapper if not present
-          if [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
-            curl -sL https://raw.githubusercontent.com/gradle/gradle/v8.10.0/gradle/wrapper/gradle-wrapper.jar -o gradle/wrapper/gradle-wrapper.jar
-          fi
+          # Remove existing gradle wrapper and regenerate
+          rm -rf gradle/wrapper
+          mkdir -p gradle/wrapper
+          # Download gradle wrapper from official source
+          curl -sL https://services.gradle.org/distributions/gradle-8.10-bin.zip -o /tmp/gradle.zip
+          unzip -q /tmp/gradle.zip -d /tmp/gradle
+          cp /tmp/gradle/gradle-8.10/lib/gradle-wrapper-*.jar gradle/wrapper/gradle-wrapper.jar
+          # Update wrapper properties
+          cat > gradle/wrapper/gradle-wrapper.properties << EOF
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.10-bin.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF
           chmod +x gradlew
           ./gradlew assembleRelease
         env:
