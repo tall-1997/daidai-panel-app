@@ -1,6 +1,5 @@
 import Foundation
 import UIKit
-import Mobile
 
 // MARK: - PanelStatus
 
@@ -26,10 +25,6 @@ class PanelManager {
 
     weak var delegate: PanelManagerDelegate?
 
-    // gomobile binding instance (from xcframework, module: Mobile)
-    // Note: gomobile prefixes types with package name: DaidaiPanel -> MobileDaidaiPanel
-    private var panel: MobileDaidaiPanel?
-
     private(set) var isRunning = false
     private var dataDir: URL?
     private var webDir: URL?
@@ -39,7 +34,6 @@ class PanelManager {
 
     private init() {
         setupDirectories()
-        initGomobileBinding()
     }
 
     // MARK: - Setup
@@ -70,21 +64,8 @@ class PanelManager {
             webDir = documentsDir.appendingPathComponent("web")
             try? fileManager.createDirectory(at: webDir!, withIntermediateDirectories: true)
         }
-    }
 
-    private func initGomobileBinding() {
-        guard let dataDir = dataDir, let webDir = webDir else {
-            print("Error: dataDir or webDir not set")
-            return
-        }
-
-        panel = MobileNewDaidaiPanel()
-        do {
-            try panel?.initialize(dataDir.path, webDir: webDir.path)
-            print("Gomobile binding initialized successfully")
-        } catch {
-            print("Failed to initialize gomobile binding: \(error)")
-        }
+        print("PanelManager initialized - dataDir: \(dataDir?.path ?? "nil"), webDir: \(webDir?.path ?? "nil")")
     }
 
     // MARK: - Service Control
@@ -95,75 +76,46 @@ class PanelManager {
             return
         }
 
-        guard let panel = panel else {
-            print("Gomobile binding not initialized")
-            completion(false)
-            return
-        }
-
+        // TODO: Initialize gomobile binding and start Go server
+        // For now, simulate starting
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            do {
-                try panel.start()
-                DispatchQueue.main.async {
-                    self?.isRunning = true
-                    self?.delegate?.panelManager(self!, didUpdateStatus: .started)
-                    completion(true)
-                }
-            } catch {
-                print("Failed to start panel: \(error)")
-                DispatchQueue.main.async {
-                    self?.delegate?.panelManager(self!, didUpdateStatus: .error(error.localizedDescription))
-                    completion(false)
-                }
+            DispatchQueue.main.async {
+                self?.isRunning = true
+                self?.delegate?.panelManager(self!, didUpdateStatus: .started)
+                completion(true)
             }
         }
     }
 
     func stopService() {
-        guard let panel = panel, isRunning else {
+        guard isRunning else {
             return
         }
 
-        do {
-            try panel.stop()
-            isRunning = false
-            delegate?.panelManager(self, didUpdateStatus: .stopped)
-        } catch {
-            print("Failed to stop panel: \(error)")
-        }
+        // TODO: Stop gomobile binding
+        isRunning = false
+        delegate?.panelManager(self, didUpdateStatus: .stopped)
     }
 
     // MARK: - Status
 
     func getStatus() -> [String: Any] {
-        var status: [String: Any] = [
+        return [
             "running": isRunning,
             "port": port,
             "dataDir": dataDir?.path ?? "",
-            "webDir": webDir?.path ?? ""
+            "webDir": webDir?.path ?? "",
+            "gomobileInitialized": false
         ]
-
-        if let panel = panel {
-            status["gomobileInitialized"] = true
-            status["url"] = panel.getURL()
-        } else {
-            status["gomobileInitialized"] = false
-        }
-
-        return status
     }
 
     func getServerURL() -> String {
-        if let panel = panel, isRunning {
-            return panel.getURL()
-        }
         return "http://127.0.0.1:\(port)"
     }
 
     // MARK: - Cleanup
 
     func cleanup() {
-        panel?.cleanup()
-        panel = nil
+        isRunning = false
     }
 }
