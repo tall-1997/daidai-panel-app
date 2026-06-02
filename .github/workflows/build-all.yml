@@ -142,16 +142,16 @@ jobs:
           go get golang.org/x/mobile
           go get golang.org/x/mobile/cmd/gomobile
           go get golang.org/x/mobile/cmd/gobind
-          gomobile bind -target=ios -iosversion=16.0 -o ../ios/DaidaiPanel/DaidaiPanel.xcframework ./mobile
+          gomobile bind -target=ios -iosversion=16.0 -o ../ios/DaidaiPanel/Mobile.xcframework ./mobile
 
       - name: Verify xcframework
         run: |
           echo "=== xcframework contents ==="
-          ls -la ios/DaidaiPanel/DaidaiPanel.xcframework/
+          ls -la ios/DaidaiPanel/Mobile.xcframework/
           echo "=== Info.plist ==="
-          cat ios/DaidaiPanel/DaidaiPanel.xcframework/Info.plist
+          cat ios/DaidaiPanel/Mobile.xcframework/Info.plist
           echo "=== Framework modules ==="
-          find ios/DaidaiPanel/DaidaiPanel.xcframework -name "*.swiftmodule" -o -name "module.modulemap" | head -20
+          find ios/DaidaiPanel/Mobile.xcframework -name "*.swiftmodule" -o -name "module.modulemap" | head -20
 
       - name: Import Code Signing Certificate
         if: env.IOS_CERTIFICATE_P12 != ''
