@@ -9,6 +9,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.provider.Settings;
 import android.util.Log;
 import android.view.View;
@@ -56,8 +57,8 @@ public class MainActivity extends AppCompatActivity {
         // 初始化视图
         initViews();
         
-        // 初始化面板管理器
-        panelManager = new PanelManager(this);
+        // 初始化面板管理器（使用单例）
+        panelManager = PanelManager.getInstance(this);
         
         // 检查权限
         checkPermissions();

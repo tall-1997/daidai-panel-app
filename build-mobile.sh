@@ -83,10 +83,18 @@ build_go_android() {
     CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build \
         -o "${PROJECT_ROOT}/android/app/src/main/assets/bin/daidai-server-arm64" \
         -ldflags="-s -w" \
-        .
+        ./cmd/mobile
     
-    print_msg "Go backend built for Android (arm64)"
-    print_msg "Binary size: $(du -sh ${PROJECT_ROOT}/android/app/src/main/assets/bin/daidai-server-arm64 | cut -f1)"
+    # Build for armv7 (older devices)
+    print_msg "Building for armv7..."
+    CGO_ENABLED=0 GOOS=android GOARCH=arm GOARM=7 go build \
+        -o "${PROJECT_ROOT}/android/app/src/main/assets/bin/daidai-server-armv7" \
+        -ldflags="-s -w" \
+        ./cmd/mobile
+    
+    print_msg "Go backend built for Android"
+    print_msg "Binary size (arm64): $(du -sh ${PROJECT_ROOT}/android/app/src/main/assets/bin/daidai-server-arm64 | cut -f1)"
+    print_msg "Binary size (armv7): $(du -sh ${PROJECT_ROOT}/android/app/src/main/assets/bin/daidai-server-armv7 | cut -f1)"
 }
 
 # Build Go backend for iOS
@@ -155,21 +163,7 @@ build_android_apk() {
 build_ios_ipa() {
     print_step "Building iOS IPA..."
     
-    cd "${PROJECT_ROOT}/ios"
-    
-    # Check if Xcode is available
-    if ! command -v xcodebuild &> /dev/null; then
-        print_warn "Xcode not found, skipping iOS build"
-        return
-    fi
-    
-    # Build for simulator (for testing)
-    print_msg "Building for simulator..."
-    xcodebuild \
-        -scheme DaidaiPanel \
-        -destination 'platform=iOS Simulator,name=iPhone 15' \
-        -configuration Debug \
-        build
+    "${SCRIPTS_DIR}/build-ios.sh" build
     
     print_msg "iOS build completed"
 }
@@ -190,9 +184,13 @@ show_summary() {
     fi
     
     # iOS
-    echo "  iOS Project: ${PROJECT_ROOT}/ios/"
-    echo ""
+    local ios_ipa="${PROJECT_ROOT}/dist/ios/DaidaiPanel-unsigned.ipa"
+    if [ -f "${ios_ipa}" ]; then
+        local size=$(du -sh "${ios_ipa}" | cut -f1)
+        echo "  iOS IPA (unsigned): ${ios_ipa} (${size})"
+    fi
     
+    echo ""
     echo "Next steps:"
     echo ""
     echo "  Android:"
@@ -200,9 +198,8 @@ show_summary() {
     echo "    2. Or transfer APK to device and install manually"
     echo ""
     echo "  iOS:"
-    echo "    1. Open ${PROJECT_ROOT}/ios/DaidaiPanel.xcodeproj in Xcode"
-    echo "    2. Configure signing & capabilities"
-    echo "    3. Build and run on device"
+    echo "    1. The unsigned IPA needs to be signed before installation"
+    echo "    2. For development, use Xcode to build and run on a connected device"
     echo ""
 }
 
@@ -218,6 +215,7 @@ show_help() {
     echo "  frontend     Build frontend only"
     echo "  go-android   Build Go backend for Android"
     echo "  go-ios       Build Go backend for iOS"
+    echo "  release      Build release packages"
     echo "  clean        Clean all build artifacts"
     echo "  help         Show this help message"
     echo ""
@@ -225,6 +223,7 @@ show_help() {
     echo "  $0 all       # Build everything"
     echo "  $0 android   # Build Android only"
     echo "  $0 ios       # Build iOS only"
+    echo "  $0 release   # Build release packages"
 }
 
 # Clean build artifacts
@@ -293,6 +292,9 @@ main() {
             ;;
         go-ios)
             build_go_ios
+            ;;
+        release)
+            "${SCRIPTS_DIR}/../build-release.sh" all
             ;;
         clean)
             clean_build

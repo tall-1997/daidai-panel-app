@@ -3,24 +3,46 @@ package com.daidai.panel;
 import android.content.Context;
 import android.util.Log;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+
 /**
- * 面板管理器，负责与Go后端交互
+ * 面板管理器，负责管理Go后端服务
+ * 通过子进程方式启动Go二进制文件，通过HTTP检测服务状态
+ * 使用单例模式确保所有组件共享同一实例
  */
 public class PanelManager {
     private static final String TAG = "PanelManager";
+    private static volatile PanelManager instance;
+    
     private final Context context;
-    private long nativeHandle = 0;
+    private Process serverProcess;
     private boolean isRunning = false;
+    private int port = 5701;
 
-    public PanelManager(Context context) {
-        this.context = context;
-        // 加载Go库
-        try {
-            System.loadLibrary("daidai");
-            Log.d(TAG, "Native library loaded");
-        } catch (UnsatisfiedLinkError e) {
-            Log.e(TAG, "Failed to load native library", e);
+    /**
+     * 获取单例实例
+     */
+    public static PanelManager getInstance(Context context) {
+        if (instance == null) {
+            synchronized (PanelManager.class) {
+                if (instance == null) {
+                    instance = new PanelManager(context.getApplicationContext());
+                }
+            }
         }
+        return instance;
+    }
+
+    private PanelManager(Context context) {
+        this.context = context;
     }
 
     /**
@@ -30,15 +52,53 @@ public class PanelManager {
      * @param port 监听端口
      */
     public void startServer(String dataDir, String webDir, int port) {
+        this.port = port;
         Log.d(TAG, "startServer called");
-        
+        Log.d(TAG, "Data dir: " + dataDir);
+        Log.d(TAG, "Web dir: " + webDir);
+        Log.d(TAG, "Port: " + port);
+
         // 确保目录存在
-        new java.io.File(dataDir).mkdirs();
-        new java.io.File(webDir).mkdirs();
-        
-        // 调用Go函数启动服务器
-        nativeStartServer(dataDir, webDir, port);
-        isRunning = true;
+        new File(dataDir).mkdirs();
+        new File(webDir).mkdirs();
+
+        // 复制二进制文件到可执行位置
+        String binaryPath = copyBinaryToExecutableLocation();
+        if (binaryPath == null) {
+            Log.e(TAG, "Failed to copy binary");
+            return;
+        }
+
+        // 启动子进程
+        try {
+            ProcessBuilder pb = new ProcessBuilder(
+                binaryPath,
+                "-data-dir", dataDir,
+                "-web-dir", webDir,
+                "-port", String.valueOf(port)
+            );
+            pb.redirectErrorStream(true);
+            serverProcess = pb.start();
+
+            // 读取进程输出（避免阻塞）
+            new Thread(() -> {
+                try {
+                    BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(serverProcess.getInputStream()));
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        Log.d(TAG, "[Server] " + line);
+                    }
+                } catch (IOException e) {
+                    Log.e(TAG, "Error reading process output", e);
+                }
+            }).start();
+
+            isRunning = true;
+            Log.d(TAG, "Server process started");
+        } catch (IOException e) {
+            Log.e(TAG, "Failed to start server process", e);
+        }
     }
 
     /**
@@ -46,62 +106,152 @@ public class PanelManager {
      */
     public void stopServer() {
         Log.d(TAG, "stopServer called");
-        nativeStopServer();
+        if (serverProcess != null) {
+            serverProcess.destroy();
+            try {
+                serverProcess.waitFor();
+            } catch (InterruptedException e) {
+                Log.e(TAG, "Interrupted while waiting for server to stop", e);
+            }
+            serverProcess = null;
+        }
         isRunning = false;
     }
 
     /**
      * 检查服务器是否运行中
+     * 通过HTTP请求检测服务状态
      */
     public boolean isServerRunning() {
-        return nativeIsServerRunning();
+        if (!isRunning || serverProcess == null) {
+            return false;
+        }
+
+        // 检查进程是否还活着
+        try {
+            serverProcess.exitValue();
+            // 进程已退出
+            isRunning = false;
+            return false;
+        } catch (IllegalThreadStateException e) {
+            // 进程还在运行，检查HTTP端口
+            return checkHttpPort();
+        }
+    }
+
+    /**
+     * 通过HTTP请求检查端口是否可访问
+     */
+    private boolean checkHttpPort() {
+        try {
+            URL url = new URL("http://127.0.0.1:" + port);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setConnectTimeout(1000);
+            conn.setReadTimeout(1000);
+            conn.setRequestMethod("GET");
+            int responseCode = conn.getResponseCode();
+            conn.disconnect();
+            return responseCode > 0;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /**
      * 获取服务器端口
      */
     public int getServerPort() {
-        return nativeGetServerPort();
+        return port;
     }
 
     /**
      * 获取服务器URL
      */
     public String getServerURL() {
-        int port = getServerPort();
-        if (port > 0) {
-            return "http://127.0.0.1:" + port;
-        }
-        return "http://127.0.0.1:5701";
+        return "http://127.0.0.1:" + port;
     }
 
     /**
      * 初始化数据目录
      */
     public void initDataDir(String dataDir) {
-        new java.io.File(dataDir + "/scripts").mkdirs();
-        new java.io.File(dataDir + "/logs").mkdirs();
-        new java.io.File(dataDir + "/backups").mkdirs();
-        new java.io.File(dataDir + "/deps").mkdirs();
+        new File(dataDir + "/scripts").mkdirs();
+        new File(dataDir + "/logs").mkdirs();
+        new File(dataDir + "/backups").mkdirs();
+        new File(dataDir + "/deps").mkdirs();
     }
 
     /**
      * 初始化Web目录
      */
     public void initWebDir(String webDir) {
-        new java.io.File(webDir).mkdirs();
+        new File(webDir).mkdirs();
     }
 
     /**
      * 获取版本号
      */
     public String getVersion() {
-        return "2.2.14-mobile";
+        return "0.0.1";
     }
 
-    // Native方法声明
-    private native void nativeStartServer(String dataDir, String webDir, int port);
-    private native void nativeStopServer();
-    private native boolean nativeIsServerRunning();
-    private native int nativeGetServerPort();
+    /**
+     * 从assets复制二进制文件到可执行位置
+     * @return 二进制文件路径，失败返回null
+     */
+    private String copyBinaryToExecutableLocation() {
+        String arch = getArch();
+        String assetPath = "bin/daidai-server-" + arch;
+        String targetPath = context.getFilesDir().getAbsolutePath() + "/bin/daidai-server";
+
+        File targetFile = new File(targetPath);
+        File targetDir = targetFile.getParentFile();
+
+        if (!targetDir.exists()) {
+            targetDir.mkdirs();
+        }
+
+        // 如果已存在且可执行，直接返回
+        if (targetFile.exists() && targetFile.canExecute()) {
+            Log.d(TAG, "Binary already exists: " + targetPath);
+            return targetPath;
+        }
+
+        // 从assets复制
+        try {
+            InputStream in = context.getAssets().open(assetPath);
+            OutputStream out = new FileOutputStream(targetFile);
+
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                out.write(buffer, 0, read);
+            }
+
+            in.close();
+            out.close();
+
+            // 设置可执行权限
+            targetFile.setExecutable(true, false);
+
+            Log.d(TAG, "Binary copied to: " + targetPath);
+            return targetPath;
+        } catch (IOException e) {
+            Log.e(TAG, "Failed to copy binary from assets: " + assetPath, e);
+            return null;
+        }
+    }
+
+    /**
+     * 获取当前设备架构
+     */
+    private String getArch() {
+        String arch = android.os.Build.SUPPORTED_ABIS[0];
+        if (arch.contains("arm64")) {
+            return "arm64";
+        } else if (arch.contains("arm")) {
+            return "armv7";
+        }
+        return "arm64"; // 默认arm64
+    }
 }

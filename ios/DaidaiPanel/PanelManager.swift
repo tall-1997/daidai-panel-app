@@ -101,7 +101,7 @@ class PanelManager {
     
     /// 获取版本号
     func getVersion() -> String {
-        return "2.2.14-mobile"
+        return "0.0.1"
     }
     
     /// 确保服务在后台继续运行
@@ -210,7 +210,7 @@ class DaidaiPanel {
     }
     
     func getVersion() -> String {
-        return "2.2.14-mobile"
+        return "0.0.1"
     }
     
     func logMessage(_ tag: String, message: String) {

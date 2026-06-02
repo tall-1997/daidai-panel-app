@@ -28,7 +28,7 @@ public class PanelService extends Service {
         super.onCreate();
         Log.d(TAG, "Service onCreate");
         
-        panelManager = new PanelManager(this);
+        panelManager = PanelManager.getInstance(this);
         createNotificationChannel();
     }
 
@@ -86,12 +86,24 @@ public class PanelService extends Service {
                 Log.d(TAG, "Web dir: " + webDir);
                 
                 panelManager.startServer(dataDir, webDir, port);
-                isRunning = true;
                 
-                Log.d(TAG, "Panel server started on port " + port);
+                // 等待服务器启动
+                int maxWait = 30;
+                int waited = 0;
+                while (!panelManager.isServerRunning() && waited < maxWait) {
+                    Thread.sleep(1000);
+                    waited++;
+                    Log.d(TAG, "Waiting for server... " + waited + "s");
+                }
                 
-                // 更新通知
-                updateNotification("面板服务运行中 - 端口: " + port);
+                if (panelManager.isServerRunning()) {
+                    isRunning = true;
+                    Log.d(TAG, "Panel server started on port " + port);
+                    updateNotification("面板服务运行中 - 端口: " + port);
+                } else {
+                    Log.e(TAG, "Panel server failed to start within timeout");
+                    updateNotification("面板服务启动超时");
+                }
                 
             } catch (Exception e) {
                 Log.e(TAG, "Failed to start panel server", e);
