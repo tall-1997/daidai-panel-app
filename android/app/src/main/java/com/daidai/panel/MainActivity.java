@@ -32,6 +32,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 主Activity
@@ -68,6 +70,9 @@ public class MainActivity extends AppCompatActivity {
         webView = findViewById(R.id.webview);
         progressBar = findViewById(R.id.progress_bar);
         statusText = findViewById(R.id.status_text);
+        
+        // 初始时隐藏 WebView
+        webView.setVisibility(View.GONE);
         
         // 配置WebView
         setupWebView();
@@ -106,6 +111,7 @@ public class MainActivity extends AppCompatActivity {
                 super.onPageFinished(view, url);
                 Log.d(TAG, "Page finished loading: " + url);
                 hideLoading();
+                webView.setVisibility(View.VISIBLE);
             }
 
             @Override
@@ -181,11 +187,16 @@ public class MainActivity extends AppCompatActivity {
         // 检查是否需要忽略电池优化
         checkBatteryOptimization();
         
-        // 复制前端资源
-        copyWebAssets();
-        
-        // 启动面板服务
-        startPanelService();
+        // 在后台线程执行初始化
+        new Thread(() -> {
+            // 1. 先复制前端资源（同步完成）
+            copyWebAssetsSync();
+            
+            // 2. 复制完成后启动面板服务
+            handler.post(() -> {
+                startPanelService();
+            });
+        }).start();
     }
 
     private void checkBatteryOptimization() {
@@ -214,7 +225,10 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void copyWebAssets() {
+    /**
+     * 同步复制前端资源，确保完成后才返回
+     */
+    private void copyWebAssetsSync() {
         String webDir = getFilesDir().getAbsolutePath() + "/web";
         File webDirFile = new File(webDir);
         
@@ -224,16 +238,14 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         
-        showLoading("正在复制前端资源...");
+        handler.post(() -> showLoading("正在复制前端资源..."));
         
-        new Thread(() -> {
-            try {
-                copyAssetFolder("web", webDir);
-                Log.d(TAG, "Web assets copied successfully");
-            } catch (IOException e) {
-                Log.e(TAG, "Failed to copy web assets", e);
-            }
-        }).start();
+        try {
+            copyAssetFolder("web", webDir);
+            Log.d(TAG, "Web assets copied successfully");
+        } catch (IOException e) {
+            Log.e(TAG, "Failed to copy web assets", e);
+        }
     }
 
     private void copyAssetFolder(String assetFolder, String targetFolder) throws IOException {
@@ -244,7 +256,7 @@ public class MainActivity extends AppCompatActivity {
         
         String[] files = getAssets().list(assetFolder);
         if (files == null || files.length == 0) {
-            // 复制文件
+            // 是文件，直接复制
             copyAssetFile(assetFolder, targetFolder);
             return;
         }
@@ -265,17 +277,25 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void copyAssetFile(String assetPath, String targetPath) throws IOException {
+        // 确保目标目录存在
+        File targetFile = new File(targetPath);
+        File parentDir = targetFile.getParentFile();
+        if (parentDir != null && !parentDir.exists()) {
+            parentDir.mkdirs();
+        }
+        
         InputStream in = getAssets().open(assetPath);
         OutputStream out = new FileOutputStream(targetPath);
         
-        byte[] buffer = new byte[1024];
+        byte[] buffer = new byte[4096];
         int read;
         while ((read = in.read(buffer)) != -1) {
             out.write(buffer, 0, read);
         }
         
-        in.close();
+        out.flush();
         out.close();
+        in.close();
     }
 
     private void startPanelService() {
@@ -316,7 +336,7 @@ public class MainActivity extends AppCompatActivity {
                 if (panelManager.isServerRunning()) {
                     loadPanel();
                 } else {
-                    showError("面板服务启动超时");
+                    showError("面板服务启动超时，请重启应用");
                 }
             });
         }).start();
@@ -329,6 +349,7 @@ public class MainActivity extends AppCompatActivity {
         Log.d(TAG, "Loading panel: " + url);
         showLoading("正在加载面板页面...");
         
+        webView.setVisibility(View.VISIBLE);
         webView.loadUrl(url);
     }
 
@@ -341,6 +362,9 @@ public class MainActivity extends AppCompatActivity {
                 statusText.setVisibility(View.VISIBLE);
                 statusText.setText(message);
             }
+            if (webView != null) {
+                webView.setVisibility(View.GONE);
+            }
         });
     }
 
@@ -351,6 +375,9 @@ public class MainActivity extends AppCompatActivity {
             }
             if (statusText != null) {
                 statusText.setVisibility(View.GONE);
+            }
+            if (webView != null) {
+                webView.setVisibility(View.VISIBLE);
             }
         });
     }
@@ -363,6 +390,9 @@ public class MainActivity extends AppCompatActivity {
             if (statusText != null) {
                 statusText.setVisibility(View.VISIBLE);
                 statusText.setText(message);
+            }
+            if (webView != null) {
+                webView.setVisibility(View.GONE);
             }
         });
     }
@@ -379,13 +409,17 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        webView.onResume();
+        if (webView != null) {
+            webView.onResume();
+        }
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        webView.onPause();
+        if (webView != null) {
+            webView.onPause();
+        }
     }
 
     @Override

@@ -12,6 +12,9 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 面板管理器，负责管理Go后端服务
@@ -24,8 +27,10 @@ public class PanelManager {
     
     private final Context context;
     private Process serverProcess;
-    private boolean isRunning = false;
+    private volatile boolean isRunning = false;
     private int port = 5701;
+    private final CountDownLatch serverReadyLatch = new CountDownLatch(1);
+    private final AtomicBoolean serverStarted = new AtomicBoolean(false);
 
     /**
      * 获取单例实例
@@ -52,6 +57,11 @@ public class PanelManager {
      * @param port 监听端口
      */
     public void startServer(String dataDir, String webDir, int port) {
+        if (serverStarted.getAndSet(true)) {
+            Log.d(TAG, "Server already started, skipping");
+            return;
+        }
+        
         this.port = port;
         Log.d(TAG, "startServer called");
         Log.d(TAG, "Data dir: " + dataDir);
@@ -61,6 +71,9 @@ public class PanelManager {
         // 确保目录存在
         new File(dataDir).mkdirs();
         new File(webDir).mkdirs();
+
+        // 初始化数据目录结构
+        initDataDir(dataDir);
 
         // 复制二进制文件到可执行位置
         String binaryPath = copyBinaryToExecutableLocation();
@@ -77,7 +90,13 @@ public class PanelManager {
                 "-web-dir", webDir,
                 "-port", String.valueOf(port)
             );
+            
+            // 设置工作目录
+            pb.directory(new File(dataDir));
+            
+            // 重定向错误流到标准输出
             pb.redirectErrorStream(true);
+            
             serverProcess = pb.start();
 
             // 读取进程输出（避免阻塞）
@@ -88,14 +107,41 @@ public class PanelManager {
                     String line;
                     while ((line = reader.readLine()) != null) {
                         Log.d(TAG, "[Server] " + line);
+                        
+                        // 检测服务是否启动成功
+                        if (line.contains("呆呆面板已启动") || line.contains("端口")) {
+                            isRunning = true;
+                            serverReadyLatch.countDown();
+                        }
                     }
                 } catch (IOException e) {
                     Log.e(TAG, "Error reading process output", e);
                 }
-            }).start();
+                
+                // 进程结束
+                Log.d(TAG, "Server process ended");
+                isRunning = false;
+            }, "ServerOutputReader").start();
 
-            isRunning = true;
-            Log.d(TAG, "Server process started");
+            // 等待服务启动（最多30秒）
+            try {
+                boolean ready = serverReadyLatch.await(30, TimeUnit.SECONDS);
+                if (ready) {
+                    Log.d(TAG, "Server is ready");
+                } else {
+                    Log.w(TAG, "Server startup timeout, checking HTTP...");
+                    // 超时后检查HTTP端口
+                    if (checkHttpPort()) {
+                        isRunning = true;
+                        Log.d(TAG, "Server is running (detected via HTTP)");
+                    } else {
+                        Log.e(TAG, "Server failed to start");
+                    }
+                }
+            } catch (InterruptedException e) {
+                Log.e(TAG, "Interrupted while waiting for server", e);
+            }
+            
         } catch (IOException e) {
             Log.e(TAG, "Failed to start server process", e);
         }
@@ -109,13 +155,14 @@ public class PanelManager {
         if (serverProcess != null) {
             serverProcess.destroy();
             try {
-                serverProcess.waitFor();
+                serverProcess.waitFor(5, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
                 Log.e(TAG, "Interrupted while waiting for server to stop", e);
             }
             serverProcess = null;
         }
         isRunning = false;
+        serverStarted.set(false);
     }
 
     /**
@@ -143,17 +190,23 @@ public class PanelManager {
      * 通过HTTP请求检查端口是否可访问
      */
     private boolean checkHttpPort() {
+        HttpURLConnection conn = null;
         try {
             URL url = new URL("http://127.0.0.1:" + port);
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setConnectTimeout(1000);
-            conn.setReadTimeout(1000);
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setConnectTimeout(2000);
+            conn.setReadTimeout(2000);
             conn.setRequestMethod("GET");
             int responseCode = conn.getResponseCode();
-            conn.disconnect();
+            Log.d(TAG, "HTTP check response code: " + responseCode);
             return responseCode > 0;
         } catch (Exception e) {
+            Log.d(TAG, "HTTP check failed: " + e.getMessage());
             return false;
+        } finally {
+            if (conn != null) {
+                conn.disconnect();
+            }
         }
     }
 
@@ -218,18 +271,18 @@ public class PanelManager {
         }
 
         // 从assets复制
+        InputStream in = null;
+        OutputStream out = null;
         try {
-            InputStream in = context.getAssets().open(assetPath);
-            OutputStream out = new FileOutputStream(targetFile);
+            in = context.getAssets().open(assetPath);
+            out = new FileOutputStream(targetFile);
 
             byte[] buffer = new byte[8192];
             int read;
             while ((read = in.read(buffer)) != -1) {
                 out.write(buffer, 0, read);
             }
-
-            in.close();
-            out.close();
+            out.flush();
 
             // 设置可执行权限
             targetFile.setExecutable(true, false);
@@ -239,6 +292,13 @@ public class PanelManager {
         } catch (IOException e) {
             Log.e(TAG, "Failed to copy binary from assets: " + assetPath, e);
             return null;
+        } finally {
+            try {
+                if (in != null) in.close();
+                if (out != null) out.close();
+            } catch (IOException e) {
+                Log.e(TAG, "Error closing streams", e);
+            }
         }
     }
 
