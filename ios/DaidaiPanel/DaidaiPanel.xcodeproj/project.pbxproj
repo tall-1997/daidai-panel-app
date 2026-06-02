@@ -15,6 +15,7 @@
 		A1234567890ABCDEF0000013 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF0000014 /* LaunchScreen.storyboard */; };
 		A1234567890ABCDEF0000030 /* PanelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF0000031 /* PanelManager.swift */; };
 		A1234567890ABCDEF0000032 /* Mobile.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF0000033 /* Mobile.xcframework */; };
+		A1234567890ABCDEF0000034 /* Mobile.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF0000033 /* Mobile.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -40,6 +41,20 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A1234567890ABCDEF0000035 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				A1234567890ABCDEF0000034 /* Mobile.xcframework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXGroup section */
 		A1234567890ABCDEF0000017 /* = */ = {
@@ -84,6 +99,7 @@
 				A1234567890ABCDEF0000022 /* Sources */,
 				A1234567890ABCDEF0000016 /* Frameworks */,
 				A1234567890ABCDEF0000023 /* Resources */,
+				A1234567890ABCDEF0000035 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
