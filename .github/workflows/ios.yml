@@ -54,16 +54,11 @@ jobs:
           gomobile bind -target=ios -iosversion=16.0 -o ../ios/DaidaiPanel/DaidaiPanel.xcframework ./mobile
 
       - name: Import Code Signing Certificate
+        if: ${{ secrets.IOS_CERTIFICATE_P12 != '' }}
         uses: apple-actions/import-codesign-certs@v2
         with:
           p12-file-base64: ${{ secrets.IOS_CERTIFICATE_P12 }}
           p12-password: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
-
-      - name: Install Provisioning Profile
-        uses: apple-actions/install-provisioning-profile@v2
-        with:
-          profile-base64: ${{ secrets.IOS_PROVISIONING_PROFILE }}
-          profile-name: "DaidaiPanel Distribution"
 
       - name: Build iOS App
         run: |
