@@ -15,23 +15,48 @@
                         <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <wkWebView contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="WKWebView-ID">
+                            <wkWebView contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="webView">
                                 <rect key="frame" x="0.0" y="44" width="414" height="818"/>
                                 <wkWebViewConfiguration key="configuration">
-                                    <audiovisualMediaTypes key="mediaTypesRequiringUserActionForPlayback"/>
                                     <wkPreferences key="preferences"/>
                                 </wkWebViewConfiguration>
                             </wkWebView>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="呆呆面板" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="titleLabel">
+                                <rect key="frame" x="147" y="56" width="120" height="25"/>
+                                <fontDescription key="fontDescription" type="boldSystem" pointSize="20"/>
+                                <nil key="textColor"/>
+                                <nil key="highlightedColor"/>
+                            </label>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="正在启动服务..." textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="statusLabel">
+                                <rect key="frame" x="142" y="89" width="130" height="20"/>
+                                <fontDescription key="fontDescription" type="system" pointSize="14"/>
+                                <color key="textColor" systemColor="secondaryLabelColor"/>
+                                <nil key="highlightedColor"/>
+                            </label>
+                            <activityIndicatorView hidden="YES" opaque="NO" contentMode="scaleToFill" hidesWhenStopped="YES" style="medium" translatesAutoresizingMaskIntoConstraints="NO" id="activityIndicator">
+                                <rect key="frame" x="197" y="129" width="20" height="20"/>
+                            </activityIndicatorView>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="6Tk-OE-BBY"/>
                         <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                         <constraints>
-                            <constraint firstItem="WKWebView-ID" firstAttribute="leading" secondItem="6Tk-OE-BBY" secondAttribute="leading" id="leading-WKWebView"/>
-                            <constraint firstItem="WKWebView-ID" firstAttribute="trailing" secondItem="6Tk-OE-BBY" secondAttribute="trailing" id="trailing-WKWebView"/>
-                            <constraint firstItem="WKWebView-ID" firstAttribute="top" secondItem="6Tk-OE-BBY" secondAttribute="top" id="top-WKWebView"/>
-                            <constraint firstItem="WKWebView-ID" firstAttribute="bottom" secondItem="6Tk-OE-BBY" secondAttribute="bottom" id="bottom-WKWebView"/>
+                            <constraint firstItem="webView" firstAttribute="top" secondItem="statusLabel" secondAttribute="bottom" constant="20" id="constraint1"/>
+                            <constraint firstItem="webView" firstAttribute="leading" secondItem="6Tk-OE-BBY" secondAttribute="leading" id="constraint2"/>
+                            <constraint firstAttribute="trailing" secondItem="webView" secondAttribute="trailing" id="constraint3"/>
+                            <constraint firstAttribute="bottom" secondItem="webView" secondAttribute="bottom" id="constraint4"/>
+                            <constraint firstItem="titleLabel" firstAttribute="centerX" secondItem="8bC-Xf-vdC" secondAttribute="centerX" id="constraint5"/>
+                            <constraint firstItem="statusLabel" firstAttribute="centerX" secondItem="8bC-Xf-vdC" secondAttribute="centerX" id="constraint6"/>
+                            <constraint firstItem="activityIndicator" firstAttribute="centerX" secondItem="8bC-Xf-vdC" secondAttribute="centerX" id="constraint7"/>
+                            <constraint firstItem="activityIndicator" firstAttribute="top" secondItem="statusLabel" secondAttribute="bottom" constant="20" id="constraint8"/>
+                            <constraint firstItem="titleLabel" firstAttribute="top" secondItem="6Tk-OE-BBY" secondAttribute="top" constant="12" id="constraint9"/>
+                            <constraint firstItem="statusLabel" firstAttribute="top" secondItem="titleLabel" secondAttribute="bottom" constant="8" id="constraint10"/>
                         </constraints>
                     </view>
+                    <connections>
+                        <outlet property="webView" destination="webView" id="outlet1"/>
+                        <outlet property="statusLabel" destination="statusLabel" id="outlet2"/>
+                        <outlet property="activityIndicator" destination="activityIndicator" id="outlet3"/>
+                    </connections>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="dkx-z0-nzr" sceneMemberID="firstResponder"/>
             </objects>
