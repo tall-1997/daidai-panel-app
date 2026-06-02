@@ -86,8 +86,9 @@ jobs:
       - name: Build Android APK
         run: |
           cd android
-          # Use gradle 8.x instead of 9.x
-          gradle --version 8.10 assembleRelease
+          # Use gradle wrapper
+          chmod +x gradlew
+          ./gradlew assembleRelease
         env:
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
