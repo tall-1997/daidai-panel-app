@@ -55,6 +55,7 @@ jobs:
           go get golang.org/x/mobile
           go get golang.org/x/mobile/cmd/gomobile
           go get golang.org/x/mobile/cmd/gobind
+          mkdir -p ../android/app/libs
           gomobile bind -target=android -androidapi=24 -o ../android/app/libs/daidai-panel.aar ./mobile
 
       - name: Build Android APK
