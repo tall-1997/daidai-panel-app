@@ -52,6 +52,9 @@ jobs:
       - name: Build Go mobile bindings
         run: |
           cd server
+          go get golang.org/x/mobile
+          go get golang.org/x/mobile/cmd/gomobile
+          go get golang.org/x/mobile/cmd/gobind
           gomobile bind -target=android -androidapi=24 -o ../android/app/libs/daidai-panel.aar ./mobile
 
       - name: Build Android APK

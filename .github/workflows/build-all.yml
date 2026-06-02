@@ -77,6 +77,9 @@ jobs:
       - name: Build Go mobile bindings
         run: |
           cd server
+          go get golang.org/x/mobile
+          go get golang.org/x/mobile/cmd/gomobile
+          go get golang.org/x/mobile/cmd/gobind
           mkdir -p ../android/app/libs
           gomobile bind -target=android -androidapi=24 -o ../android/app/libs/daidai-panel.aar ./mobile
 
@@ -132,6 +135,9 @@ jobs:
       - name: Build Go mobile bindings
         run: |
           cd server
+          go get golang.org/x/mobile
+          go get golang.org/x/mobile/cmd/gomobile
+          go get golang.org/x/mobile/cmd/gobind
           mkdir -p ../ios/DaidaiPanel/DaidaiPanel.xcframework
           gomobile bind -target=ios -iosversion=16.0 -o ../ios/DaidaiPanel/DaidaiPanel.xcframework ./mobile
 
