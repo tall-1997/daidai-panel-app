@@ -27,7 +27,8 @@ class PanelManager {
     weak var delegate: PanelManagerDelegate?
 
     // gomobile binding instance (from xcframework, module: Mobile)
-    private var panel: DaidaiPanel?
+    // Note: gomobile prefixes types with package name: DaidaiPanel -> MobileDaidaiPanel
+    private var panel: MobileDaidaiPanel?
 
     private(set) var isRunning = false
     private var dataDir: URL?
@@ -77,7 +78,7 @@ class PanelManager {
             return
         }
 
-        panel = NewDaidaiPanel()
+        panel = MobileNewDaidaiPanel()
         do {
             try panel?.initialize(dataDir.path, webDir: webDir.path)
             print("Gomobile binding initialized successfully")
