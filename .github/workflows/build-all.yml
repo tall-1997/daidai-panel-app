@@ -86,7 +86,10 @@ jobs:
       - name: Build Android APK
         run: |
           cd android
-          # Use gradle wrapper
+          # Download gradle wrapper if not present
+          if [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
+            curl -sL https://raw.githubusercontent.com/gradle/gradle/v8.10.0/gradle/wrapper/gradle-wrapper.jar -o gradle/wrapper/gradle-wrapper.jar
+          fi
           chmod +x gradlew
           ./gradlew assembleRelease
         env:
