@@ -1,31 +1,19 @@
 package com.daidai.panel
 
 import android.content.Context
-import android.content.Intent
-import android.os.Build
 import android.util.Log
-import androidx.lifecycle.DefaultLifecycleObserver
-import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.ProcessLifecycleOwner
 import java.io.File
-import java.io.FileOutputStream
 
-class PanelManager(private val context: Context) : DefaultLifecycleObserver {
+class PanelManager(private val context: Context) {
 
     companion object {
         private const val TAG = "PanelManager"
-        private const val BINARY_NAME = "daidai-panel"
-        private const val WEB_DIR_NAME = "web"
     }
 
-    private var process: Process? = null
+    private var panel: DaidaiPanel? = null
     private var isRunning = false
-    private var onDataDir: File? = null
-    private var onWebDir: File? = null
-
-    init {
-        ProcessLifecycleOwner.get().lifecycle.addObserver(this)
-    }
+    private var dataDir: File? = null
+    private var webDir: File? = null
 
     fun startService(callback: (Boolean) -> Unit) {
         try {
@@ -42,87 +30,56 @@ class PanelManager(private val context: Context) : DefaultLifecycleObserver {
             val logDir = File(dataDir, "log")
             logDir.mkdirs()
 
-            onDataDir = dataDir
+            this.dataDir = dataDir
 
-            // Copy binary from assets
-            val binaryFile = File(context.filesDir, BINARY_NAME)
-            if (!binaryFile.exists()) {
-                copyAsset(BINARY_NAME, binaryFile)
-                binaryFile.setExecutable(true)
-            }
-
-            // Copy web assets
-            val webDir = File(context.filesDir, WEB_DIR_NAME)
+            // Web assets from bundle
+            val webDir = File(context.filesDir, "web")
             if (!webDir.exists()) {
-                copyAssetFolder(WEB_DIR_NAME, webDir)
+                copyAssetFolder("web", webDir)
             }
-            onWebDir = webDir
+            this.webDir = webDir
 
-            // Copy config template
-            val configFile = File(dataDir, "config.yaml")
-            if (!configFile.exists()) {
-                val configContent = """
-                    server:
-                      port: 5701
-                      mode: release
-                      web_dir: ${webDir.absolutePath}
-                    database:
-                      path: ${File(dbDir, "panel.db").absolutePath}
-                    data:
-                      dir: ${dataDir.absolutePath}
-                      scripts_dir: ${scriptsDir.absolutePath}
-                      log_dir: ${logDir.absolutePath}
-                    cors:
-                      origins:
-                        - "*"
-                """.trimIndent()
-                configFile.writeText(configContent)
-            }
+            // Initialize gomobile binding
+            panel = DaidaiPanel()
+            panel?.initialize(dataDir.absolutePath, webDir.absolutePath)
 
-            // Start service
-            val intent = Intent(context, PanelService::class.java).apply {
-                putExtra("data_dir", dataDir.absolutePath)
-                putExtra("web_dir", webDir.absolutePath)
-                putExtra("binary_path", binaryFile.absolutePath)
-            }
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
-
-            isRunning = true
-            callback(true)
+            // Start server in background
+            Thread {
+                try {
+                    panel?.start()
+                    isRunning = true
+                    Log.i(TAG, "Panel server started")
+                    callback(true)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to start panel", e)
+                    callback(false)
+                }
+            }.start()
 
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to start service", e)
+            Log.e(TAG, "Failed to initialize", e)
             callback(false)
         }
     }
 
     fun stopService() {
         try {
-            context.stopService(Intent(context, PanelService::class.java))
+            panel?.stop()
             isRunning = false
+            Log.i(TAG, "Panel server stopped")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to stop service", e)
+            Log.e(TAG, "Failed to stop panel", e)
         }
     }
 
     fun isRunning(): Boolean {
-        return isRunning
+        return panel?.isRunning ?: false
     }
 
-    fun getDataDir(): File? = onDataDir
-    fun getWebDir(): File? = onWebDir
-
-    private fun copyAsset(assetName: String, destFile: File) {
-        context.assets.open(assetName).use { input ->
-            FileOutputStream(destFile).use { output ->
-                input.copyTo(output)
-            }
-        }
+    fun getDataDir(): File? = dataDir
+    fun getWebDir(): File? = webDir
+    fun getServerURL(): String {
+        return panel?.url ?: "http://127.0.0.1:5701"
     }
 
     private fun copyAssetFolder(assetFolder: String, destFolder: File) {
@@ -137,23 +94,12 @@ class PanelManager(private val context: Context) : DefaultLifecycleObserver {
             if (subAssets != null && subAssets.isNotEmpty()) {
                 copyAssetFolder(assetPath, destFile)
             } else {
-                copyAsset(assetPath, destFile)
+                context.assets.open(assetPath).use { input ->
+                    destFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
             }
         }
-    }
-
-    override fun onStart(owner: LifecycleOwner) {
-        super.onStart(owner)
-        Log.d(TAG, "App in foreground")
-    }
-
-    override fun onStop(owner: LifecycleOwner) {
-        super.onStop(owner)
-        Log.d(TAG, "App in background")
-    }
-
-    override fun onDestroy(owner: LifecycleOwner) {
-        super.onDestroy(owner)
-        Log.d(TAG, "App destroyed")
     }
 }

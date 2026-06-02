@@ -198,14 +198,18 @@ jobs:
         env:
           IOS_CERTIFICATE_P12: ${{ secrets.IOS_CERTIFICATE_P12 }}
 
-      - name: Prepare unsigned archive
+      - name: Prepare unsigned archive and IPA
         if: env.IOS_CERTIFICATE_P12 == ''
         run: |
-          mkdir -p ios/DaidaiPanel/build/export
+          mkdir -p ios/DaidaiPanel/build/export/Payload
           cd ios/DaidaiPanel/build
-          zip -r export/DaidaiPanel.xcframework.zip DaidaiPanel.xcframework || true
-          echo "No signing certificate configured. Archive only (xcframework.zip)." > export/README.txt
-          cp -r DaidaiPanel.xcarchive export/ 2>/dev/null || true
+          # Create unsigned IPA
+          cp -r DaidaiPanel.xcarchive/Products/Applications/DaidaiPanel.app Payload/
+          cd export
+          zip -r DaidaiPanel-unsigned.ipa Payload
+          rm -rf Payload
+          echo "No signing certificate configured." > README.txt
+          echo "DaidaiPanel-unsigned.ipa - Unsigned IPA (requires signing before install)" >> README.txt
         env:
           IOS_CERTIFICATE_P12: ${{ secrets.IOS_CERTIFICATE_P12 }}
 
@@ -215,8 +219,6 @@ jobs:
           name: daidai-panel-ios-${{ env.APP_VERSION }}
           path: |
             ios/DaidaiPanel/build/export/*.ipa
-            ios/DaidaiPanel/build/export/*.xcframework.zip
-            ios/DaidaiPanel/build/export/*.xcarchive
             ios/DaidaiPanel/build/export/README.txt
           retention-days: 30
 

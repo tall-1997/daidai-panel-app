@@ -145,7 +145,8 @@ class MainActivity : AppCompatActivity() {
             }
 
             if (panelManager?.isRunning()!!) {
-                webView.loadUrl(PANEL_URL)
+                val url = panelManager?.getServerURL() ?: PANEL_URL
+                webView.loadUrl(url)
             } else {
                 Toast.makeText(this@MainActivity, "面板启动超时", Toast.LENGTH_SHORT).show()
             }
