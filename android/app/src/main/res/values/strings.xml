@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">呆呆面板</string>
+    <string name="channel_name">面板服务</string>
+    <string name="channel_description">保持呆呆面板在后台运行</string>
+    <string name="notification_title">呆呆面板</string>
+    <string name="notification_text">面板正在运行</string>
+    <string name="stop_service">停止</string>
+    <string name="auto_start">开机自启动</string>
+    <string name="auto_start_summary">设备启动时自动运行面板</string>
+</resources>
