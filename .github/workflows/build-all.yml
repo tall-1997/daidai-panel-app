@@ -86,15 +86,8 @@ jobs:
       - name: Build Android APK
         run: |
           cd android
-          # Download gradle wrapper if not present
-          if [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
-            wget -q https://services.gradle.org/distributions/gradle-8.5-bin.zip -O /tmp/gradle.zip
-            unzip -q /tmp/gradle.zip -d /tmp/gradle
-            mkdir -p gradle/wrapper
-            cp /tmp/gradle/gradle-8.5/lib/gradle-wrapper-*.jar gradle/wrapper/gradle-wrapper.jar
-          fi
-          chmod +x gradlew
-          ./gradlew assembleRelease
+          # Use gradle directly instead of wrapper
+          gradle assembleRelease
         env:
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
