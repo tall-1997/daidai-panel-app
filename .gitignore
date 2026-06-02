@@ -1,0 +1,50 @@
+# Build outputs
+*.apk
+*.ipa
+*.xcframework
+*.so
+*.dylib
+*.exe
+
+# Go build artifacts
+*.test
+*.out
+vendor/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Android
+android/app/build/
+android/.gradle/
+android/local.properties
+android/*.jks
+android/*.keystore
+
+# iOS
+ios/build/
+ios/DerivedData/
+ios/*.xcworkspace
+ios/*.xcodeproj/xcuserdata/
+ios/Pods/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary
+tmp/
+temp/
