@@ -1,6 +1,10 @@
 import Foundation
 import UIKit
 
+// Import gomobile generated framework
+// This will be available after gomobile bind generates the xcframework
+// import DaidaiPanel
+
 // MARK: - PanelStatus
 
 enum PanelStatus {
@@ -25,11 +29,15 @@ class PanelManager {
     
     weak var delegate: PanelManagerDelegate?
     
+    // gomobile binding instance
+    // private var daidaiPanel: DaidaiPanel?
+    
     private var process: Process?
     private(set) var isRunning = false
     private var dataDir: URL?
     private var webDir: URL?
     private var binaryPath: URL?
+    private let port = 5701
     
     // MARK: - Initialization
     
@@ -63,14 +71,33 @@ class PanelManager {
         let logDir = dataDir!.appendingPathComponent("log")
         try? fileManager.createDirectory(at: logDir, withIntermediateDirectories: true)
         
-        // Web assets directory
-        webDir = documentsDir.appendingPathComponent("web")
+        // Web assets directory - try bundle first, then documents
+        if let bundleWeb = Bundle.main.url(forResource: "web", withExtension: nil) {
+            webDir = bundleWeb
+        } else {
+            webDir = documentsDir.appendingPathComponent("web")
+            copyWebAssetsIfNeeded()
+        }
         
         // Binary path
         binaryPath = documentsDir.appendingPathComponent("daidai-panel")
         
         // Copy resources if needed
         copyResourcesIfNeeded()
+        
+        // Initialize gomobile binding
+        // initGomobileBinding()
+    }
+    
+    private func copyWebAssetsIfNeeded() {
+        let fileManager = FileManager.default
+        
+        // Copy web assets from bundle if available
+        if let bundleWeb = Bundle.main.url(forResource: "web", withExtension: nil) {
+            if !fileManager.fileExists(atPath: webDir!.path) {
+                try? fileManager.copyItem(at: bundleWeb, to: webDir!)
+            }
+        }
     }
     
     private func copyResourcesIfNeeded() {
@@ -84,21 +111,14 @@ class PanelManager {
             }
         }
         
-        // Copy web assets from bundle
-        if let bundleWeb = Bundle.main.url(forResource: "web", withExtension: nil) {
-            if !fileManager.fileExists(atPath: webDir!.path) {
-                try? fileManager.copyItem(at: bundleWeb, to: webDir!)
-            }
-        }
-        
         // Create config file if needed
         let configFile = dataDir!.appendingPathComponent("config.yaml")
         if !fileManager.fileExists(atPath: configFile.path) {
             let configContent = """
                 server:
-                  port: 5701
+                  port: \(port)
                   mode: release
-                  web_dir: \(webDir!.path)
+                  web_dir: \(webDir?.path ?? "")
                 database:
                   path: \(dataDir!.appendingPathComponent("db/panel.db").path)
                 data:
@@ -113,6 +133,25 @@ class PanelManager {
         }
     }
     
+    /*
+    private func initGomobileBinding() {
+        // Initialize gomobile binding
+        daidaiPanel = DaidaiPanel()
+        
+        guard let dataDir = dataDir, let webDir = webDir else {
+            print("Error: dataDir or webDir not set")
+            return
+        }
+        
+        do {
+            try daidaiPanel?.initialize(dataDir.path, webDir: webDir.path)
+            print("Gomobile binding initialized successfully")
+        } catch {
+            print("Failed to initialize gomobile binding: \(error)")
+        }
+    }
+    */
+    
     // MARK: - Service Control
     
     func startService(completion: @escaping (Bool) -> Void) {
@@ -121,6 +160,27 @@ class PanelManager {
             return
         }
         
+        // Use gomobile binding if available
+        /*
+        if let daidaiPanel = daidaiPanel {
+            do {
+                try daidaiPanel.start()
+                isRunning = true
+                delegate?.panelManager(self, didUpdateStatus: .started)
+                completion(true)
+            } catch {
+                print("Failed to start via gomobile: \(error)")
+                completion(false)
+            }
+            return
+        }
+        */
+        
+        // Fallback to process execution
+        startProcess(completion: completion)
+    }
+    
+    private func startProcess(completion: @escaping (Bool) -> Void) {
         guard let binaryPath = binaryPath, FileManager.default.fileExists(atPath: binaryPath.path) else {
             completion(false)
             return
@@ -178,6 +238,21 @@ class PanelManager {
     }
     
     func stopService() {
+        // Use gomobile binding if available
+        /*
+        if let daidaiPanel = daidaiPanel {
+            do {
+                try daidaiPanel.stop()
+                isRunning = false
+                delegate?.panelManager(self, didUpdateStatus: .stopped)
+            } catch {
+                print("Failed to stop via gomobile: \(error)")
+            }
+            return
+        }
+        */
+        
+        // Fallback to process termination
         guard let process = process, process.isRunning else {
             return
         }
@@ -199,9 +274,23 @@ class PanelManager {
     func getStatus() -> [String: Any] {
         return [
             "running": isRunning,
-            "port": 5701,
+            "port": port,
             "dataDir": dataDir?.path ?? "",
             "webDir": webDir?.path ?? ""
         ]
+    }
+    
+    func getServerURL() -> String {
+        return "http://127.0.0.1:\(port)"
+    }
+    
+    // MARK: - Cleanup
+    
+    func cleanup() {
+        /*
+        daidaiPanel?.cleanup()
+        daidaiPanel = nil
+        */
+        stopService()
     }
 }

@@ -2,6 +2,13 @@
 # You can control the set of applied configuration files using the
 # proguardFiles setting in build.gradle.
 
+# Keep the application class
+-keep class com.daidai.panel.** { *; }
+
+# Keep gomobile bindings
+-keep class go.** { *; }
+-keep class org.golang.** { *; }
+
 # Keep WebView JavaScript interface
 -keepclassmembers class * {
     @android.webkit.JavascriptInterface <methods>;
@@ -12,21 +19,9 @@
     native <methods>;
 }
 
-# Keep PanelManager
--keep class com.daidai.panel.PanelManager { *; }
-
-# Keep PanelService
--keep class com.daidai.panel.PanelService { *; }
-
-# Keep BootReceiver
--keep class com.daidai.panel.BootReceiver { *; }
-
-# Keep MainActivity
--keep class com.daidai.panel.MainActivity { *; }
-
-# Keep R class
--keepclassmembers class **.R$* {
-    public static <fields>;
+# Keep Parcelables
+-keepclassmembers class * implements android.os.Parcelable {
+    public static final ** CREATOR;
 }
 
 # Keep Serializable
@@ -39,29 +34,29 @@
     java.lang.Object readResolve();
 }
 
-# Keep Parcelable
--keep class * implements android.os.Parcelable {
-    public static final android.os.Parcelable$Creator *;
+# Keep R8 from removing JSoup
+-keeppackagenames org.jsoup.nodes
+
+# Keep annotations
+-keepattributes *Annotation*
+
+# Keep source file names for stack traces
+-keepattributes SourceFile,LineNumberTable
+
+# Keep Kotlin metadata
+-keepattributes RuntimeVisibleAnnotations
+-keep class kotlin.Metadata { *; }
+
+# Keep Kotlin coroutines
+-keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
+-keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
+-keepclassmembers class kotlinx.coroutines.** {
+    volatile <fields>;
 }
 
-# Keep enum
--keepclassmembers enum * {
-    public static **[] values();
-    public static ** valueOf(java.lang.String);
-}
+# Keep AndroidX
+-keep class androidx.** { *; }
+-keep interface androidx.** { *; }
 
-# Keep View constructors
--keep public class * extends android.view.View {
-    public <init>(android.content.Context);
-    public <init>(android.content.Context, android.util.AttributeSet);
-    public <init>(android.content.Context, android.util.AttributeSet, int);
-    public void set*(...);
-}
-
-# Remove logging
--assumenosideeffects class android.util.Log {
-    public static boolean isLoggable(java.lang.String, int);
-    public static int v(...);
-    public static int d(...);
-    public static int i(...);
-}
+# Keep Google Material
+-keep class com.google.android.material.** { *; }
