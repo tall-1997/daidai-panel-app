@@ -88,20 +88,16 @@ jobs:
           mkdir -p ../android/app/libs
           gomobile bind -target=android -androidapi=24 -o ../android/app/libs/daidai-panel.aar ./mobile
 
-      - name: Build Android APK
+      - name: Build Android APK (debug signed, installable)
         run: |
           cd android
-          gradle assembleRelease
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          gradle assembleDebug
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: daidai-panel-android-${{ env.APP_VERSION }}
-          path: android/app/build/outputs/apk/release/*.apk
+          path: android/app/build/outputs/apk/debug/*.apk
           retention-days: 30
 
   # Build iOS
