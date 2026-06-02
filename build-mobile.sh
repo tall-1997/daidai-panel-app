@@ -37,7 +37,7 @@ print_step() {
 }
 
 # Configuration
-PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
 SCRIPTS_DIR="${PROJECT_ROOT}/scripts"
 
 # Check prerequisites
@@ -75,23 +75,18 @@ build_go_android() {
     
     cd "${PROJECT_ROOT}/server"
     
-    # Build for arm64
+    # Create output directories
+    mkdir -p "${PROJECT_ROOT}/android/app/src/main/assets/bin"
+    
+    # Build for arm64 (most modern devices)
     print_msg "Building for arm64..."
     CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build \
-        -o "${PROJECT_ROOT}/android/app/src/main/jniLibs/arm64-v8a/libdaidai.so" \
-        -buildmode=c-shared \
+        -o "${PROJECT_ROOT}/android/app/src/main/assets/bin/daidai-server-arm64" \
         -ldflags="-s -w" \
-        ./mobile
+        .
     
-    # Build for arm
-    print_msg "Building for arm..."
-    CGO_ENABLED=0 GOOS=android GOARCH=arm go build \
-        -o "${PROJECT_ROOT}/android/app/src/main/jniLibs/armeabi-v7a/libdaidai.so" \
-        -buildmode=c-shared \
-        -ldflags="-s -w" \
-        ./mobile
-    
-    print_msg "Go backend built for Android"
+    print_msg "Go backend built for Android (arm64)"
+    print_msg "Binary size: $(du -sh ${PROJECT_ROOT}/android/app/src/main/assets/bin/daidai-server-arm64 | cut -f1)"
 }
 
 # Build Go backend for iOS

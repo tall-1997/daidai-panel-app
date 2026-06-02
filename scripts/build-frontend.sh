@@ -25,6 +25,10 @@ print_error() {
 
 # Configuration
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# Ensure PROJECT_ROOT is the repo root, not parent
+if [ ! -d "${PROJECT_ROOT}/web" ] && [ -d "$(dirname "$0")/../web" ]; then
+    PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fi
 WEB_DIR="${PROJECT_ROOT}/web"
 DIST_DIR="${WEB_DIR}/dist"
 ANDROID_ASSETS="${PROJECT_ROOT}/android/app/src/main/assets/web"
