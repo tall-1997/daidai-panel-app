@@ -12,7 +12,6 @@
 		A1234567890ABCDEF0000005 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF0000006 /* ViewController.swift */; };
 		A1234567890ABCDEF0000007 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF0000008 /* Main.storyboard */; };
 		A1234567890ABCDEF0000009 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF0000010 /* Assets.xcassets */; };
-		A1234567890ABCDEF0000011 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF0000012 /* Info.plist */; };
 		A1234567890ABCDEF0000013 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A1234567890ABCDEF0000014 /* LaunchScreen.storyboard */; };
 /* End PBXBuildFile section */
 
@@ -128,7 +127,6 @@
 			files = (
 				A1234567890ABCDEF0000007 /* Main.storyboard in Resources */,
 				A1234567890ABCDEF0000009 /* Assets.xcassets in Resources */,
-				A1234567890ABCDEF0000011 /* Info.plist in Resources */,
 				A1234567890ABCDEF0000013 /* LaunchScreen.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
