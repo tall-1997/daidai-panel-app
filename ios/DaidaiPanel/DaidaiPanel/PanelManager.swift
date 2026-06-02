@@ -1,6 +1,6 @@
 import Foundation
 import UIKit
-import Mobile
+import DaidaiPanel
 
 // MARK: - PanelStatus
 
