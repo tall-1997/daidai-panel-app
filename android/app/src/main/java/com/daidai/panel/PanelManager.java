@@ -12,13 +12,11 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 面板管理器，负责管理Go后端服务
- * 通过子进程方式启动Go二进制文件，通过HTTP检测服务状态
+ * 通过子进程方式启动Go二进制文件，通过HTTP轮询检测服务状态
  * 使用单例模式确保所有组件共享同一实例
  */
 public class PanelManager {
@@ -29,8 +27,8 @@ public class PanelManager {
     private Process serverProcess;
     private volatile boolean isRunning = false;
     private int port = 5701;
-    private final CountDownLatch serverReadyLatch = new CountDownLatch(1);
     private final AtomicBoolean serverStarted = new AtomicBoolean(false);
+    private Thread outputReaderThread;
 
     /**
      * 获取单例实例
@@ -56,14 +54,15 @@ public class PanelManager {
      * @param webDir 前端资源目录
      * @param port 监听端口
      */
-    public void startServer(String dataDir, String webDir, int port) {
-        if (serverStarted.getAndSet(true)) {
-            Log.d(TAG, "Server already started, skipping");
+    public synchronized void startServer(String dataDir, String webDir, int port) {
+        if (serverStarted.get()) {
+            Log.d(TAG, "Server already started or starting, skipping");
             return;
         }
+        serverStarted.set(true);
         
         this.port = port;
-        Log.d(TAG, "startServer called");
+        Log.d(TAG, "=== startServer called ===");
         Log.d(TAG, "Data dir: " + dataDir);
         Log.d(TAG, "Web dir: " + webDir);
         Log.d(TAG, "Port: " + port);
@@ -81,6 +80,10 @@ public class PanelManager {
             Log.e(TAG, "Failed to copy binary");
             return;
         }
+        
+        Log.d(TAG, "Binary path: " + binaryPath);
+        Log.d(TAG, "Binary exists: " + new File(binaryPath).exists());
+        Log.d(TAG, "Binary executable: " + new File(binaryPath).canExecute());
 
         // 启动子进程
         try {
@@ -97,50 +100,65 @@ public class PanelManager {
             // 重定向错误流到标准输出
             pb.redirectErrorStream(true);
             
+            Log.d(TAG, "Starting process...");
             serverProcess = pb.start();
+            Log.d(TAG, "Process started successfully");
 
-            // 读取进程输出（避免阻塞）
-            new Thread(() -> {
+            // 读取进程输出
+            outputReaderThread = new Thread(() -> {
                 try {
                     BufferedReader reader = new BufferedReader(
                         new InputStreamReader(serverProcess.getInputStream()));
                     String line;
                     while ((line = reader.readLine()) != null) {
                         Log.d(TAG, "[Server] " + line);
-                        
-                        // 检测服务是否启动成功
-                        if (line.contains("呆呆面板已启动") || line.contains("端口")) {
-                            isRunning = true;
-                            serverReadyLatch.countDown();
-                        }
                     }
                 } catch (IOException e) {
                     Log.e(TAG, "Error reading process output", e);
                 }
                 
-                // 进程结束
-                Log.d(TAG, "Server process ended");
-                isRunning = false;
-            }, "ServerOutputReader").start();
+                Log.d(TAG, "Server process output stream ended");
+            }, "ServerOutputReader");
+            outputReaderThread.setDaemon(true);
+            outputReaderThread.start();
 
-            // 等待服务启动（最多30秒）
-            try {
-                boolean ready = serverReadyLatch.await(30, TimeUnit.SECONDS);
-                if (ready) {
-                    Log.d(TAG, "Server is ready");
-                } else {
-                    Log.w(TAG, "Server startup timeout, checking HTTP...");
-                    // 超时后检查HTTP端口
-                    if (checkHttpPort()) {
-                        isRunning = true;
-                        Log.d(TAG, "Server is running (detected via HTTP)");
-                    } else {
-                        Log.e(TAG, "Server failed to start");
+            // 启动HTTP轮询线程
+            new Thread(() -> {
+                Log.d(TAG, "Starting HTTP poll...");
+                int maxRetries = 60; // 最多等待60秒
+                int retryCount = 0;
+                
+                while (retryCount < maxRetries) {
+                    try {
+                        Thread.sleep(1000);
+                        retryCount++;
+                        
+                        // 检查进程是否还活着
+                        try {
+                            serverProcess.exitValue();
+                            Log.e(TAG, "Process exited with code: " + serverProcess.exitValue());
+                            isRunning = false;
+                            return;
+                        } catch (IllegalThreadStateException e) {
+                            // 进程还在运行
+                        }
+                        
+                        // 检查HTTP端口
+                        if (checkHttpPort()) {
+                            isRunning = true;
+                            Log.d(TAG, "=== Server is ready! (after " + retryCount + "s) ===");
+                            return;
+                        }
+                        
+                        Log.d(TAG, "Waiting for server... " + retryCount + "s");
+                    } catch (InterruptedException e) {
+                        Log.e(TAG, "Poll thread interrupted", e);
+                        return;
                     }
                 }
-            } catch (InterruptedException e) {
-                Log.e(TAG, "Interrupted while waiting for server", e);
-            }
+                
+                Log.e(TAG, "Server startup timeout after " + maxRetries + "s");
+            }, "ServerHttpPoller").start();
             
         } catch (IOException e) {
             Log.e(TAG, "Failed to start server process", e);
@@ -155,7 +173,7 @@ public class PanelManager {
         if (serverProcess != null) {
             serverProcess.destroy();
             try {
-                serverProcess.waitFor(5, TimeUnit.SECONDS);
+                serverProcess.waitFor();
             } catch (InterruptedException e) {
                 Log.e(TAG, "Interrupted while waiting for server to stop", e);
             }
@@ -167,10 +185,9 @@ public class PanelManager {
 
     /**
      * 检查服务器是否运行中
-     * 通过HTTP请求检测服务状态
      */
     public boolean isServerRunning() {
-        if (!isRunning || serverProcess == null) {
+        if (serverProcess == null) {
             return false;
         }
 
@@ -182,7 +199,7 @@ public class PanelManager {
             return false;
         } catch (IllegalThreadStateException e) {
             // 进程还在运行，检查HTTP端口
-            return checkHttpPort();
+            return isRunning || checkHttpPort();
         }
     }
 
@@ -194,14 +211,15 @@ public class PanelManager {
         try {
             URL url = new URL("http://127.0.0.1:" + port);
             conn = (HttpURLConnection) url.openConnection();
-            conn.setConnectTimeout(2000);
-            conn.setReadTimeout(2000);
+            conn.setConnectTimeout(1000);
+            conn.setReadTimeout(1000);
             conn.setRequestMethod("GET");
+            conn.setUseCaches(false);
             int responseCode = conn.getResponseCode();
-            Log.d(TAG, "HTTP check response code: " + responseCode);
+            Log.d(TAG, "HTTP check: port=" + port + ", code=" + responseCode);
             return responseCode > 0;
         } catch (Exception e) {
-            Log.d(TAG, "HTTP check failed: " + e.getMessage());
+            // 不打印日志，太频繁
             return false;
         } finally {
             if (conn != null) {
@@ -274,18 +292,24 @@ public class PanelManager {
         InputStream in = null;
         OutputStream out = null;
         try {
+            Log.d(TAG, "Copying binary from assets: " + assetPath);
             in = context.getAssets().open(assetPath);
             out = new FileOutputStream(targetFile);
 
             byte[] buffer = new byte[8192];
             int read;
+            long totalRead = 0;
             while ((read = in.read(buffer)) != -1) {
                 out.write(buffer, 0, read);
+                totalRead += read;
             }
             out.flush();
 
+            Log.d(TAG, "Binary copied, size: " + totalRead + " bytes");
+
             // 设置可执行权限
-            targetFile.setExecutable(true, false);
+            boolean executable = targetFile.setExecutable(true, false);
+            Log.d(TAG, "Set executable: " + executable);
 
             Log.d(TAG, "Binary copied to: " + targetPath);
             return targetPath;

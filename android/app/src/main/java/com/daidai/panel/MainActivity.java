@@ -32,8 +32,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 主Activity
@@ -47,7 +45,6 @@ public class MainActivity extends AppCompatActivity {
     private TextView statusText;
     private PanelManager panelManager;
     private Handler handler;
-    private boolean isServerStarted = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -111,7 +108,6 @@ public class MainActivity extends AppCompatActivity {
                 super.onPageFinished(view, url);
                 Log.d(TAG, "Page finished loading: " + url);
                 hideLoading();
-                webView.setVisibility(View.VISIBLE);
             }
 
             @Override
@@ -182,6 +178,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void initPanel() {
+        Log.d(TAG, "=== initPanel called ===");
         showLoading("正在初始化面板...");
         
         // 检查是否需要忽略电池优化
@@ -190,10 +187,13 @@ public class MainActivity extends AppCompatActivity {
         // 在后台线程执行初始化
         new Thread(() -> {
             // 1. 先复制前端资源（同步完成）
+            Log.d(TAG, "Step 1: Copying web assets...");
             copyWebAssetsSync();
+            Log.d(TAG, "Step 1: Web assets copied");
             
             // 2. 复制完成后启动面板服务
             handler.post(() -> {
+                Log.d(TAG, "Step 2: Starting panel service...");
                 startPanelService();
             });
         }).start();
@@ -234,14 +234,20 @@ public class MainActivity extends AppCompatActivity {
         
         // 如果web目录已存在且有index.html，跳过复制
         if (webDirFile.exists() && new File(webDir, "index.html").exists()) {
-            Log.d(TAG, "Web assets already exist");
+            Log.d(TAG, "Web assets already exist, skipping copy");
             return;
         }
         
         handler.post(() -> showLoading("正在复制前端资源..."));
         
         try {
+            Log.d(TAG, "Copying web assets to: " + webDir);
             copyAssetFolder("web", webDir);
+            
+            // 验证复制结果
+            File indexFile = new File(webDir, "index.html");
+            Log.d(TAG, "index.html exists: " + indexFile.exists());
+            
             Log.d(TAG, "Web assets copied successfully");
         } catch (IOException e) {
             Log.e(TAG, "Failed to copy web assets", e);
@@ -284,28 +290,39 @@ public class MainActivity extends AppCompatActivity {
             parentDir.mkdirs();
         }
         
-        InputStream in = getAssets().open(assetPath);
-        OutputStream out = new FileOutputStream(targetPath);
-        
-        byte[] buffer = new byte[4096];
-        int read;
-        while ((read = in.read(buffer)) != -1) {
-            out.write(buffer, 0, read);
+        InputStream in = null;
+        OutputStream out = null;
+        try {
+            in = getAssets().open(assetPath);
+            out = new FileOutputStream(targetPath);
+            
+            byte[] buffer = new byte[4096];
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                out.write(buffer, 0, read);
+            }
+            out.flush();
+        } finally {
+            if (out != null) {
+                try { out.close(); } catch (IOException ignored) {}
+            }
+            if (in != null) {
+                try { in.close(); } catch (IOException ignored) {}
+            }
         }
-        
-        out.flush();
-        out.close();
-        in.close();
     }
 
     private void startPanelService() {
+        Log.d(TAG, "=== startPanelService called ===");
         showLoading("正在启动面板服务...");
         
         // 启动前台服务
         Intent serviceIntent = new Intent(this, PanelService.class);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Log.d(TAG, "Starting foreground service...");
             startForegroundService(serviceIntent);
         } else {
+            Log.d(TAG, "Starting service...");
             startService(serviceIntent);
         }
         
@@ -314,39 +331,48 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void waitForServer() {
+        Log.d(TAG, "=== waitForServer called ===");
+        
         new Thread(() -> {
-            int maxWait = 30; // 最多等待30秒
+            int maxWait = 60; // 最多等待60秒
             int waited = 0;
             
-            while (!panelManager.isServerRunning() && waited < maxWait) {
+            while (waited < maxWait) {
                 try {
                     Thread.sleep(1000);
                     waited++;
+                    
+                    boolean running = panelManager.isServerRunning();
+                    Log.d(TAG, "Check server status: " + running + " (waited " + waited + "s)");
+                    
+                    if (running) {
+                        Log.d(TAG, "=== Server is running! ===");
+                        handler.post(() -> loadPanel());
+                        return;
+                    }
                     
                     final int progress = waited;
                     handler.post(() -> {
                         showLoading("正在启动面板服务... (" + progress + "s)");
                     });
                 } catch (InterruptedException e) {
+                    Log.e(TAG, "Wait interrupted", e);
                     break;
                 }
             }
             
+            Log.e(TAG, "=== Server startup timeout ===");
             handler.post(() -> {
-                if (panelManager.isServerRunning()) {
-                    loadPanel();
-                } else {
-                    showError("面板服务启动超时，请重启应用");
-                }
+                showError("面板服务启动超时，请重启应用");
             });
         }).start();
     }
 
     private void loadPanel() {
-        isServerStarted = true;
         String url = panelManager.getServerURL();
         
-        Log.d(TAG, "Loading panel: " + url);
+        Log.d(TAG, "=== loadPanel called ===");
+        Log.d(TAG, "Loading panel URL: " + url);
         showLoading("正在加载面板页面...");
         
         webView.setVisibility(View.VISIBLE);
@@ -390,6 +416,7 @@ public class MainActivity extends AppCompatActivity {
             if (statusText != null) {
                 statusText.setVisibility(View.VISIBLE);
                 statusText.setText(message);
+                statusText.setTextColor(0xFFFF0000); // 红色
             }
             if (webView != null) {
                 webView.setVisibility(View.GONE);
