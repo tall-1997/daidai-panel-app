@@ -148,10 +148,12 @@ jobs:
         run: |
           echo "=== xcframework contents ==="
           ls -la ios/DaidaiPanel/Mobile.xcframework/
-          echo "=== Info.plist ==="
-          cat ios/DaidaiPanel/Mobile.xcframework/Info.plist
           echo "=== Framework modules ==="
           find ios/DaidaiPanel/Mobile.xcframework -name "*.swiftmodule" -o -name "module.modulemap" | head -20
+          echo "=== ObjC Headers ==="
+          find ios/DaidaiPanel/Mobile.xcframework -name "*.h" | head -10
+          echo "=== Mobile.h ==="
+          find ios/DaidaiPanel/Mobile.xcframework -name "Mobile.h" -exec cat {} \;
 
       - name: Import Code Signing Certificate
         if: env.IOS_CERTIFICATE_P12 != ''
