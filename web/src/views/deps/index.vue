@@ -488,6 +488,11 @@ async function loadAndroidStatus() {
     console.log('[AndroidRuntime] res.data:', res.data)
     androidStatus.value = res.data
     console.log('[AndroidRuntime] androidStatus.value:', androidStatus.value)
+    
+    // 显示检测结果提示
+    if (res.data?.supported) {
+      ElMessage.success('已检测到 Android 环境，请查看页面顶部的运行时安装区域')
+    }
   } catch (e) {
     console.error('[AndroidRuntime] Error:', e)
     androidStatus.value = null
