@@ -213,10 +213,23 @@ func ensureManagedPythonVenv(syncCreate bool) bool {
 
 	_ = os.MkdirAll(filepath.Dir(venvDir), 0o755)
 	
-	// 硬编码绝对路径，彻底摆脱 PATH 依赖
+	// 硬编码绝对路径
 	python3Bin := filepath.Join(dataDir, "deps", "bin", "python", "bin", "python3.12")
 	pythonBin := filepath.Join(dataDir, "deps", "bin", "python", "bin", "python")
 	python3Link := filepath.Join(dataDir, "deps", "bin", "python", "bin", "python3")
+	
+	// 关键：执行前强制修复权限（解决 Android 16 权限限制）
+	pythonBinDir := filepath.Join(dataDir, "deps", "bin", "python", "bin")
+	if _, err := os.Stat(pythonBinDir); err == nil {
+		log.Printf("[ensureManagedPythonVenv] Fixing permissions for: %s", pythonBinDir)
+		filepath.Walk(pythonBinDir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return nil
+			}
+			os.Chmod(path, 0755)
+			return nil
+		})
+	}
 	
 	log.Printf("[ensureManagedPythonVenv] Creating venv at: %s", venvDir)
 	log.Printf("[ensureManagedPythonVenv] python3.12: %s (exists: %v)", python3Bin, fileExists(python3Bin))
@@ -232,6 +245,9 @@ func ensureManagedPythonVenv(syncCreate bool) bool {
 			log.Printf("[ensureManagedPythonVenv] Skip %s (not exists)", pythonPath)
 			continue
 		}
+		
+		// 确保文件可执行
+		os.Chmod(pythonPath, 0755)
 		
 		log.Printf("[ensureManagedPythonVenv] Trying: %s -m venv %s", pythonPath, venvDir)
 		cmd := exec.Command(pythonPath, "-m", "venv", venvDir)

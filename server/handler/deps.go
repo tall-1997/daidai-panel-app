@@ -778,17 +778,6 @@ func installDependency(id uint, depType, name string) {
 			return
 		}
 		
-		// 关键：在执行前设置可执行权限（解决 Android 16 权限限制）
-		log.Printf("[installDependency] Setting permissions for: %s", pipBin)
-		if err := os.Chmod(pipBin, 0755); err != nil {
-			log.Printf("[installDependency] Failed to chmod pip: %v", err)
-		}
-		// 同时设置 python3.12 的权限
-		pythonBin := filepath.Join(filepath.Dir(pipBin), "python3.12")
-		if _, err := os.Stat(pythonBin); err == nil {
-			os.Chmod(pythonBin, 0755)
-		}
-		
 		log.Printf("[installDependency] Installing Python dep: %s using %s", name, pipBin)
 		cmd = exec.Command(pipBin, service.BuildPipInstallArgs(extraFlags, name)...)
 		cmd.Env = append(service.PipInstallEnv(service.AppendProxyEnv(os.Environ()), service.CurrentPipMirror()), "TMPDIR=/tmp")

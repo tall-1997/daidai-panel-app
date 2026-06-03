@@ -469,17 +469,16 @@ func (h *AndroidRuntimeHandler) Install(c *gin.Context) {
 	emit(fmt.Sprintf("✅ 安装完成，共解压 %d 个文件", fileCount))
 	emit(fmt.Sprintf("安装位置: %s/%s", androidBinDir, req.Name))
 	
-	// 关键：递归设置可执行权限（解决 Android 16 权限限制问题）
+	// 关键：递归设置权限（解决 Android 16 权限限制问题）
 	emit("设置文件权限...")
 	err = filepath.Walk(targetDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		// 给所有文件添加可执行权限
-		if !info.IsDir() {
+		if info.IsDir() {
 			return os.Chmod(path, 0755)
 		}
-		return nil
+		return os.Chmod(path, 0755)
 	})
 	if err != nil {
 		emit("❌ 设置权限失败: " + err.Error())
@@ -489,7 +488,7 @@ func (h *AndroidRuntimeHandler) Install(c *gin.Context) {
 		log.Printf("[AndroidRuntime] Permissions set for: %s", targetDir)
 	}
 	
-	// 创建软链接（关键！）
+	// 创建软链接
 	if req.Name == "python" {
 		emit("创建 Python 软链接...")
 		binDir := filepath.Join(targetDir, "bin")
