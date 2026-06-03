@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -109,18 +110,22 @@ type androidRuntimeItem struct {
 
 // androidSupported 判断当前进程是不是跑在 Android 上。
 func androidSupported() bool {
-	if runtime.GOOS == "android" {
-		return true
-	}
-	if _, err := os.Stat("/data/adb/modules/daidai-panel"); err == nil {
-		return true
-	}
 	// 检测 gomobile 版本（应用私有目录）
 	if config.C != nil && strings.TrimSpace(config.C.Data.Dir) != "" {
 		if strings.HasPrefix(config.C.Data.Dir, "/data/user/") || strings.HasPrefix(config.C.Data.Dir, "/data/data/") {
+			log.Printf("[AndroidRuntime] Detected gomobile version, dataDir=%s", config.C.Data.Dir)
 			return true
 		}
 	}
+	if runtime.GOOS == "android" {
+		log.Printf("[AndroidRuntime] Detected android GOOS")
+		return true
+	}
+	if _, err := os.Stat("/data/adb/modules/daidai-panel"); err == nil {
+		log.Printf("[AndroidRuntime] Detected Magisk module")
+		return true
+	}
+	log.Printf("[AndroidRuntime] Not Android environment, GOOS=%s, dataDir=%s", runtime.GOOS, config.C.Data.Dir)
 	return false
 }
 
