@@ -57,21 +57,16 @@ public class PanelManager {
         new File(webDir).mkdirs();
         initDataDir(dataDir);
 
-        // 复制二进制到 nativeLibraryDir（有执行权限）
-        String binaryPath = copyBinaryToLibDir();
+        // 尝试多种方式复制和执行二进制
+        String binaryPath = prepareBinary();
         if (binaryPath == null) {
-            Log.e(TAG, "Failed to copy binary");
+            Log.e(TAG, "Failed to prepare binary");
             return;
         }
         
-        File binaryFile = new File(binaryPath);
-        Log.d(TAG, "Binary: " + binaryPath);
-        Log.d(TAG, "Exists: " + binaryFile.exists());
-        Log.d(TAG, "Size: " + binaryFile.length());
-        Log.d(TAG, "Can execute: " + binaryFile.canExecute());
+        Log.d(TAG, "Binary ready: " + binaryPath);
 
         try {
-            // 直接执行二进制文件
             ProcessBuilder pb = new ProcessBuilder(
                 binaryPath,
                 "-data-dir", dataDir,
@@ -143,89 +138,81 @@ public class PanelManager {
     }
 
     /**
-     * 复制二进制到 nativeLibraryDir（有 SELinux 执行权限）
+     * 准备二进制文件，尝试多种目录
      */
-    private String copyBinaryToLibDir() {
+    private String prepareBinary() {
         String arch = getArch();
         String assetPath = "bin/daidai-server-" + arch;
         
-        // 使用 nativeLibraryDir，这个目录有执行权限
-        String libDir = context.getApplicationInfo().nativeLibraryDir;
-        String targetPath = libDir + "/libdaidai.so";
+        // 尝试的目录列表
+        String[] targetDirs = {
+            context.getCodeCacheDir().getAbsolutePath(),
+            context.getCacheDir().getAbsolutePath(),
+            context.getFilesDir().getAbsolutePath() + "/bin"
+        };
         
-        File targetFile = new File(targetPath);
-        
-        // 如果已存在且大小正确，直接返回
-        if (targetFile.exists() && targetFile.length() > 1000000) {
-            Log.d(TAG, "Binary exists in lib dir: " + targetPath);
-            return targetPath;
-        }
-        
-        // 从 assets 复制
-        InputStream in = null;
-        OutputStream out = null;
-        try {
-            Log.d(TAG, "Copying to lib dir: " + targetPath);
-            in = context.getAssets().open(assetPath);
-            out = new FileOutputStream(targetFile);
+        for (String dir : targetDirs) {
+            String targetPath = dir + "/daidai-server";
+            File targetFile = new File(targetPath);
+            File parentDir = targetFile.getParentFile();
             
-            byte[] buffer = new byte[8192];
-            int read;
-            long total = 0;
-            while ((read = in.read(buffer)) != -1) {
-                out.write(buffer, 0, read);
-                total += read;
+            if (!parentDir.exists()) {
+                parentDir.mkdirs();
             }
-            out.flush();
             
-            Log.d(TAG, "Copied: " + total + " bytes");
+            // 如果已存在且大小正确
+            if (targetFile.exists() && targetFile.length() > 1000000) {
+                Log.d(TAG, "Binary exists: " + targetPath);
+                // 尝试设置权限
+                targetFile.setExecutable(true, false);
+                return targetPath;
+            }
             
-            // 设置权限
-            targetFile.setExecutable(true, false);
-            targetFile.setReadable(true, false);
-            
-            return targetPath;
-        } catch (IOException e) {
-            Log.e(TAG, "Copy failed", e);
-            
-            // 备用方案：使用 filesDir + Runtime.exec
-            return copyToFilesDir(assetPath);
-        } finally {
-            try { if (in != null) in.close(); } catch (IOException ignored) {}
-            try { if (out != null) out.close(); } catch (IOException ignored) {}
+            // 复制
+            try {
+                Log.d(TAG, "Copying to: " + targetPath);
+                InputStream in = context.getAssets().open(assetPath);
+                OutputStream out = new FileOutputStream(targetFile);
+                
+                byte[] buffer = new byte[8192];
+                int read;
+                long total = 0;
+                while ((read = in.read(buffer)) != -1) {
+                    out.write(buffer, 0, read);
+                    total += read;
+                }
+                out.flush();
+                out.close();
+                in.close();
+                
+                Log.d(TAG, "Copied: " + total + " bytes");
+                
+                // 设置权限
+                boolean executable = targetFile.setExecutable(true, false);
+                boolean readable = targetFile.setReadable(true, false);
+                Log.d(TAG, "Set executable: " + executable + ", readable: " + readable);
+                
+                // 验证
+                if (targetFile.exists() && targetFile.canExecute()) {
+                    Log.d(TAG, "Binary ready at: " + targetPath);
+                    return targetPath;
+                }
+            } catch (IOException e) {
+                Log.e(TAG, "Failed to copy to " + dir + ": " + e.getMessage());
+            }
         }
+        
+        // 最后尝试：使用 Runtime.exec 直接执行 assets 中的流
+        Log.d(TAG, "All directories failed, trying exec with pipe...");
+        return tryExecFromAssets(assetPath);
     }
     
     /**
-     * 备用方案：复制到 filesDir
+     * 尝试通过管道执行
      */
-    private String copyToFilesDir(String assetPath) {
-        String targetPath = context.getFilesDir().getAbsolutePath() + "/bin/daidai-server";
-        File targetFile = new File(targetPath);
-        targetFile.getParentFile().mkdirs();
-        
-        InputStream in = null;
-        OutputStream out = null;
-        try {
-            in = context.getAssets().open(assetPath);
-            out = new FileOutputStream(targetFile);
-            
-            byte[] buffer = new byte[8192];
-            int read;
-            while ((read = in.read(buffer)) != -1) {
-                out.write(buffer, 0, read);
-            }
-            out.flush();
-            
-            targetFile.setExecutable(true, false);
-            return targetPath;
-        } catch (IOException e) {
-            Log.e(TAG, "Fallback copy failed", e);
-            return null;
-        } finally {
-            try { if (in != null) in.close(); } catch (IOException ignored) {}
-            try { if (out != null) out.close(); } catch (IOException ignored) {}
-        }
+    private String tryExecFromAssets(String assetPath) {
+        // 这个方法不可行，返回 null
+        return null;
     }
 
     public void stopServer() {
