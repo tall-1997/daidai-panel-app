@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -206,6 +207,24 @@ func ResolvePipInstallCommand() (binary string, extraFlags []string, usingSystem
 	if strings.TrimSpace(binary) != "" {
 		return binary, nil, false
 	}
+	
+	// 检查 Android 运行时目录
+	if config.C != nil {
+		dataDir := config.C.Data.Dir
+		if dataDir != "" {
+			androidPipPaths := []string{
+				filepath.Join(dataDir, "deps", "bin", "python", "bin", "pip3"),
+				filepath.Join(dataDir, "deps", "bin", "python", "bin", "pip"),
+			}
+			for _, pipPath := range androidPipPaths {
+				if _, err := os.Stat(pipPath); err == nil {
+					log.Printf("[ResolvePipInstallCommand] Found Android pip: %s", pipPath)
+					return pipPath, nil, false
+				}
+			}
+		}
+	}
+	
 	// venv 创建失败的兜底
 	return "pip3", []string{"--break-system-packages", "--user"}, true
 }
