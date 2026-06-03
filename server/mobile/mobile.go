@@ -121,6 +121,14 @@ func (s *MobileServer) Start(dataDir, webDir string, port int) error {
 	}
 	service.CleanupManagedHelperCopiesUnderRoot(cfg.Data.ScriptsDir)
 	service.WarmManagedPythonVenv()
+	
+	// Initialize Alpine + proot environment
+	prootMgr := service.GetProotManager()
+	if err := prootMgr.InitAlpineRootfs(cfg.Data.Dir); err != nil {
+		log.Printf("[Mobile] Warning: Failed to init Alpine rootfs: %v", err)
+	} else {
+		log.Printf("[Mobile] Alpine rootfs initialized successfully")
+	}
 
 	service.InitSchedulerV2()
 	service.InitSubscriptionScheduler()

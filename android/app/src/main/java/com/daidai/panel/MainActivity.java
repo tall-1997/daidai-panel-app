@@ -72,29 +72,65 @@ public class MainActivity extends AppCompatActivity {
         new Thread(() -> {
             try {
                 String dataDir = getFilesDir().getAbsolutePath() + "/Dumb-Panel";
-                String assetsDir = getFilesDir().getAbsolutePath() + "/assets";
                 
                 // 解压 Alpine rootfs
                 File alpineDir = new File(dataDir, "alpine");
-                File alpineTar = new File(assetsDir, "alpine-rootfs.tar.gz");
+                File alpineBin = new File(alpineDir, "bin/sh");
                 
-                if (!alpineDir.exists() && alpineTar.exists()) {
-                    Log.d(TAG, "Extracting Alpine rootfs...");
+                if (!alpineBin.exists()) {
+                    Log.d(TAG, "Extracting Alpine rootfs from assets...");
+                    alpineDir.mkdirs();
+                    
+                    // 从 assets 解压
+                    InputStream in = getAssets().open("alpine/alpine-rootfs.tar.gz");
+                    // 保存到临时文件
+                    File tmpFile = new File(dataDir, "alpine-rootfs.tar.gz");
+                    FileOutputStream fos = new FileOutputStream(tmpFile);
+                    byte[] buffer = new byte[4096];
+                    int read;
+                    while ((read = in.read(buffer)) != -1) {
+                        fos.write(buffer, 0, read);
+                    }
+                    fos.flush();
+                    fos.close();
+                    in.close();
+                    
                     // 解压
                     ProcessBuilder pb = new ProcessBuilder("tar", "xzf", 
-                        alpineTar.getAbsolutePath(), "-C", alpineDir.getAbsolutePath());
+                        tmpFile.getAbsolutePath(), "-C", alpineDir.getAbsolutePath());
                     pb.start().waitFor();
-                    Log.d(TAG, "Alpine rootfs extracted");
+                    
+                    // 删除临时文件
+                    tmpFile.delete();
+                    
+                    Log.d(TAG, "Alpine rootfs extracted to: " + alpineDir.getAbsolutePath());
+                } else {
+                    Log.d(TAG, "Alpine rootfs already exists");
                 }
                 
                 // 复制 proot
-                File prootSrc = new File(assetsDir, "proot");
                 File prootDst = new File(dataDir, "proot");
-                if (!prootDst.exists() && prootSrc.exists()) {
-                    copyFile(prootSrc, prootDst);
+                if (!prootDst.exists()) {
+                    Log.d(TAG, "Copying proot from assets...");
+                    InputStream in = getAssets().open("alpine/proot");
+                    FileOutputStream fos = new FileOutputStream(prootDst);
+                    byte[] buffer = new byte[4096];
+                    int read;
+                    while ((read = in.read(buffer)) != -1) {
+                        fos.write(buffer, 0, read);
+                    }
+                    fos.flush();
+                    fos.close();
+                    in.close();
                     prootDst.setExecutable(true, false);
-                    Log.d(TAG, "Proot copied");
+                    Log.d(TAG, "Proot copied to: " + prootDst.getAbsolutePath());
+                } else {
+                    Log.d(TAG, "Proot already exists");
                 }
+                
+                // 初始化 ProotManager
+                Log.d(TAG, "Initializing ProotManager...");
+                // 这里会由 Go 代码调用 InitAlpineRootfs
                 
             } catch (Exception e) {
                 Log.e(TAG, "Failed to init Alpine environment", e);
