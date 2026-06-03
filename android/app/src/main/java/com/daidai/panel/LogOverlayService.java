@@ -367,7 +367,9 @@ public class LogOverlayService extends Service {
 
     private void installRuntime(String name) {
         hideMenu();
-        Toast.makeText(this, "正在安装 " + name + "...", Toast.LENGTH_SHORT).show();
+        String startMsg = "正在安装 " + name + "...";
+        Toast.makeText(this, startMsg, Toast.LENGTH_SHORT).show();
+        appendLog("[安装] " + startMsg);
         
         executor.execute(() -> {
             int maxRetries = 3;
@@ -378,16 +380,21 @@ public class LogOverlayService extends Service {
                 try {
                     String token = getAuthToken();
                     Log.d(TAG, "Auth token: " + (token != null ? "exists" : "null"));
+                    appendLog("[安装] Auth token: " + (token != null ? "存在" : "空"));
                     
                     if (token == null) {
+                        String msg = "请先登录面板";
                         mainHandler.post(() -> {
-                            Toast.makeText(this, "请先登录面板", Toast.LENGTH_LONG).show();
+                            Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
                         });
+                        appendLog("[安装] 错误: " + msg);
                         return;
                     }
                     
                     String url = "http://127.0.0.1:5701/api/v1/android-runtime/install";
+                    String attemptMsg = "第 " + (retryCount + 1) + " 次尝试...";
                     Log.d(TAG, "Calling install API (attempt " + (retryCount + 1) + "): " + url);
+                    appendLog("[安装] " + attemptMsg);
                     
                     HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
                     conn.setRequestMethod("POST");
@@ -403,6 +410,7 @@ public class LogOverlayService extends Service {
                     
                     int responseCode = conn.getResponseCode();
                     Log.d(TAG, "Install API response: " + responseCode);
+                    appendLog("[安装] API 响应: " + responseCode);
                     
                     if (responseCode == 200) {
                         BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
@@ -411,6 +419,7 @@ public class LogOverlayService extends Service {
                             Log.d(TAG, "SSE: " + line);
                             if (line.startsWith("data: ")) {
                                 String msg = line.substring(6);
+                                appendLog("[安装] " + msg);
                                 mainHandler.post(() -> {
                                     Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
                                 });
@@ -419,8 +428,10 @@ public class LogOverlayService extends Service {
                         reader.close();
                         conn.disconnect();
                         
+                        String successMsg = name + " 安装完成";
+                        appendLog("[安装] " + successMsg);
                         mainHandler.post(() -> {
-                            Toast.makeText(this, name + " 安装完成", Toast.LENGTH_LONG).show();
+                            Toast.makeText(this, successMsg, Toast.LENGTH_LONG).show();
                         });
                         return;
                     } else {
@@ -435,29 +446,35 @@ public class LogOverlayService extends Service {
                         
                         String errorMsg = error.toString();
                         Log.e(TAG, "Install failed (attempt " + (retryCount + 1) + "): " + errorMsg);
+                        appendLog("[安装] 失败: " + errorMsg);
                         
                         lastException = new Exception(errorMsg);
                         retryCount++;
                         
                         if (retryCount < maxRetries) {
+                            String retryMsg = "下载失败，正在重试... (" + retryCount + "/" + maxRetries + ")";
                             final int currentRetry = retryCount;
                             mainHandler.post(() -> {
-                                Toast.makeText(this, "下载失败，正在重试... (" + currentRetry + "/" + maxRetries + ")", Toast.LENGTH_SHORT).show();
+                                Toast.makeText(this, retryMsg, Toast.LENGTH_SHORT).show();
                             });
+                            appendLog("[安装] " + retryMsg);
                             Thread.sleep(2000);
                         }
                     }
                     
                 } catch (Exception e) {
                     Log.e(TAG, "Install failed (attempt " + (retryCount + 1) + ")", e);
+                    appendLog("[安装] 异常: " + e.getMessage());
                     lastException = e;
                     retryCount++;
                     
                     if (retryCount < maxRetries) {
+                        String retryMsg = "下载失败，正在重试... (" + retryCount + "/" + maxRetries + ")";
                         final int currentRetry = retryCount;
                         mainHandler.post(() -> {
-                            Toast.makeText(this, "下载失败，正在重试... (" + currentRetry + "/" + maxRetries + ")", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(this, retryMsg, Toast.LENGTH_SHORT).show();
                         });
+                        appendLog("[安装] " + retryMsg);
                         try {
                             Thread.sleep(2000);
                         } catch (InterruptedException ie) {
@@ -469,11 +486,33 @@ public class LogOverlayService extends Service {
             }
             
             String errorMsg = lastException != null ? lastException.getMessage() : "未知错误";
+            String failMsg = "安装失败: " + errorMsg;
             Log.e(TAG, "Install failed after " + maxRetries + " attempts: " + errorMsg);
+            appendLog("[安装] " + failMsg);
             mainHandler.post(() -> {
-                Toast.makeText(this, "安装失败: " + errorMsg, Toast.LENGTH_LONG).show();
+                Toast.makeText(this, failMsg, Toast.LENGTH_LONG).show();
             });
         });
+    }
+    
+    private void appendLog(String message) {
+        try {
+            String timestamp = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
+            String logLine = "[" + timestamp + "] " + message + "\n";
+            
+            File logDir = new File(getFilesDir(), "logs");
+            if (!logDir.exists()) {
+                logDir.mkdirs();
+            }
+            
+            File logFile = new File(logDir, "install.log");
+            FileOutputStream fos = new FileOutputStream(logFile, true);
+            fos.write(logLine.getBytes());
+            fos.flush();
+            fos.close();
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to append log", e);
+        }
     }
 
     private String getAuthToken() {
@@ -490,7 +529,28 @@ public class LogOverlayService extends Service {
         sb.append("系统版本: Android ").append(Build.VERSION.RELEASE).append(" (API ").append(Build.VERSION.SDK_INT).append(")\n");
         sb.append("应用版本: 0.0.1\n\n");
 
-        sb.append("=== 面板服务日志 ===\n");
+        // 安装日志
+        sb.append("=== 安装日志 ===\n");
+        File installLog = new File(getFilesDir(), "logs/install.log");
+        if (installLog.exists()) {
+            try {
+                BufferedReader reader = new BufferedReader(new InputStreamReader(new java.io.FileInputStream(installLog)));
+                String line;
+                int lineCount = 0;
+                while ((line = reader.readLine()) != null && lineCount < 200) {
+                    sb.append(line).append("\n");
+                    lineCount++;
+                }
+                reader.close();
+            } catch (IOException e) {
+                sb.append("读取失败: ").append(e.getMessage()).append("\n");
+            }
+        } else {
+            sb.append("安装日志不存在\n");
+        }
+
+        // 面板日志
+        sb.append("\n=== 面板服务日志 ===\n");
         File panelLog = new File(getFilesDir(), "Dumb-Panel/panel.log");
         if (panelLog.exists()) {
             try {
@@ -509,6 +569,7 @@ public class LogOverlayService extends Service {
             sb.append("日志文件不存在\n");
         }
 
+        // 文件检查
         sb.append("\n=== 文件检查 ===\n");
         File webDir = new File(getFilesDir(), "web");
         File indexFile = new File(webDir, "index.html");
@@ -521,6 +582,15 @@ public class LogOverlayService extends Service {
         if (dataDir.exists()) {
             sb.append("config.yaml: ").append(new File(dataDir, "config.yaml").exists()).append("\n");
             sb.append("daidai.db: ").append(new File(dataDir, "daidai.db").exists()).append("\n");
+        }
+        
+        // 检查 Python 安装目录
+        File pythonBin = new File(getFilesDir(), "Dumb-Panel/deps/bin/python/bin/python3");
+        sb.append("\n=== Python 运行时 ===\n");
+        sb.append("python3 存在: ").append(pythonBin.exists()).append("\n");
+        if (pythonBin.exists()) {
+            sb.append("python3 可执行: ").append(pythonBin.canExecute()).append("\n");
+            sb.append("python3 大小: ").append(pythonBin.length()).append(" bytes\n");
         }
 
         return sb.toString();
