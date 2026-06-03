@@ -292,10 +292,29 @@ func (h *AndroidRuntimeHandler) Install(c *gin.Context) {
 	emit(fmt.Sprintf("下载目标: %s", req.URL))
 	emit(fmt.Sprintf("解压到: %s/%s", androidBinDir, req.Name))
 
-	if err := os.MkdirAll(androidBinDir, 0o755); err != nil {
-		emit("❌ 无法创建目标目录: " + err.Error())
+	// 检查目录权限
+	parentDir := filepath.Dir(androidBinDir)
+	if err := os.MkdirAll(parentDir, 0o755); err != nil {
+		emit("❌ 无法创建父目录: " + parentDir + " - " + err.Error())
+		log.Printf("[AndroidRuntime] Failed to create parent dir: %v", err)
 		return
 	}
+	
+	if err := os.MkdirAll(androidBinDir, 0o755); err != nil {
+		emit("❌ 无法创建目标目录: " + err.Error())
+		log.Printf("[AndroidRuntime] Failed to create bin dir: %v", err)
+		return
+	}
+	
+	// 检查目录是否可写
+	testFile := filepath.Join(androidBinDir, ".test_write")
+	if err := os.WriteFile(testFile, []byte("test"), 0o644); err != nil {
+		emit("❌ 目录不可写: " + err.Error())
+		log.Printf("[AndroidRuntime] Directory not writable: %v", err)
+		return
+	}
+	os.Remove(testFile)
+	log.Printf("[AndroidRuntime] Directory is writable: %s", androidBinDir)
 
 	targetDir := filepath.Join(androidBinDir, req.Name)
 	// 清理旧目录
@@ -356,23 +375,36 @@ func (h *AndroidRuntimeHandler) Install(c *gin.Context) {
 		}
 
 		target := filepath.Join(targetDir, name)
+		log.Printf("[AndroidRuntime] Extracting: %s", target)
 
 		switch hdr.Typeflag {
 		case tar.TypeDir:
-			os.MkdirAll(target, 0o755)
+			if err := os.MkdirAll(target, 0o755); err != nil {
+				emit("❌ 创建目录失败: " + target + " - " + err.Error())
+				log.Printf("[AndroidRuntime] Failed to create dir: %v", err)
+				return
+			}
 		case tar.TypeReg:
-			os.MkdirAll(filepath.Dir(target), 0o755)
+			parentDir := filepath.Dir(target)
+			if err := os.MkdirAll(parentDir, 0o755); err != nil {
+				emit("❌ 创建父目录失败: " + parentDir + " - " + err.Error())
+				log.Printf("[AndroidRuntime] Failed to create parent dir: %v", err)
+				return
+			}
 			f, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY, os.FileMode(hdr.Mode))
 			if err != nil {
-				emit("❌ 创建文件失败: " + err.Error())
+				emit("❌ 创建文件失败: " + target + " - " + err.Error())
+				log.Printf("[AndroidRuntime] Failed to create file: %v", err)
 				return
 			}
-			if _, err := io.Copy(f, tr); err != nil {
-				f.Close()
-				emit("❌ 写入文件失败: " + err.Error())
-				return
-			}
+			written, err := io.Copy(f, tr)
 			f.Close()
+			if err != nil {
+				emit("❌ 写入文件失败: " + target + " - " + err.Error())
+				log.Printf("[AndroidRuntime] Failed to write file: %v", err)
+				return
+			}
+			log.Printf("[AndroidRuntime] Extracted: %s (%d bytes)", target, written)
 			fileCount++
 			if fileCount%100 == 0 {
 				emit(fmt.Sprintf("已解压 %d 个文件...", fileCount))
