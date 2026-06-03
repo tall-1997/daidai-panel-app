@@ -154,16 +154,26 @@ func currentManagedRuntimePaths() managedRuntimePaths {
 	androidPythonBin := filepath.Join(androidBinDir, "python", "bin")
 	androidNodeBin := filepath.Join(androidBinDir, "node", "bin")
 	
-	// 清理 PATH 中的旧路径
-	sanitizedPath := sanitizeManagedPath(os.Getenv("PATH"), nodeBin, venvBin)
+	// 构建 PATH：始终包含 Android 运行时路径（无论目录是否存在）
+	// 这样当运行时安装后，PATH 就能正确找到
+	pathParts := []string{androidPythonBin, androidNodeBin, androidBinDir}
 	
-	// 将 Android 运行时路径添加到 PATH 开头
-	androidPaths := []string{androidPythonBin, androidNodeBin, androidBinDir}
-	for _, p := range androidPaths {
-		if _, err := os.Stat(p); err == nil {
-			sanitizedPath = p + string(os.PathListSeparator) + sanitizedPath
-		}
+	// 添加现有 PATH
+	existingPath := os.Getenv("PATH")
+	if existingPath != "" {
+		pathParts = append(pathParts, existingPath)
 	}
+	
+	// 添加 venv 和 node bin（如果存在）
+	if venvBin != "" {
+		pathParts = append(pathParts, venvBin)
+	}
+	if nodeBin != "" {
+		pathParts = append(pathParts, nodeBin)
+	}
+	
+	sanitizedPath := strings.Join(pathParts, string(os.PathListSeparator))
+	log.Printf("[currentManagedRuntimePaths] PATH: %s", sanitizedPath)
 
 	return managedRuntimePaths{
 		NodeBin:          nodeBin,
