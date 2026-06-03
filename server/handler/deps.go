@@ -778,11 +778,10 @@ func installDependency(id uint, depType, name string) {
 			return
 		}
 		
-		// 使用 sh -c 方式执行，绕过 Android SELinux 限制
-		// 使用绝对路径 /system/bin/sh，因为 PATH 可能为空
+		// 使用 sh -c 方式执行，先设置权限再执行命令
 		pipArgs := service.BuildPipInstallArgs(extraFlags, name)
-		shellCmd := pipBin + " " + strings.Join(pipArgs, " ")
-		log.Printf("[installDependency] Installing Python dep: %s using /system/bin/sh -c '%s'", name, shellCmd)
+		shellCmd := "chmod 755 " + pipBin + " && " + pipBin + " " + strings.Join(pipArgs, " ")
+		log.Printf("[installDependency] Installing Python dep: %s", shellCmd)
 		
 		cmd = exec.Command("/system/bin/sh", "-c", shellCmd)
 		cmd.Env = append(service.PipInstallEnv(service.AppendProxyEnv(os.Environ()), service.CurrentPipMirror()), "TMPDIR=/tmp")
