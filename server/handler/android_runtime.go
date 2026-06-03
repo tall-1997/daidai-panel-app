@@ -115,6 +115,12 @@ func androidSupported() bool {
 	if _, err := os.Stat("/data/adb/modules/daidai-panel"); err == nil {
 		return true
 	}
+	// 检测 gomobile 版本（应用私有目录）
+	if config.C != nil && strings.TrimSpace(config.C.Data.Dir) != "" {
+		if strings.HasPrefix(config.C.Data.Dir, "/data/user/") || strings.HasPrefix(config.C.Data.Dir, "/data/data/") {
+			return true
+		}
+	}
 	return false
 }
 
