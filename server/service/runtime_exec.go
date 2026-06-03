@@ -180,7 +180,11 @@ func createProotCommand(interpreter, scriptPath string, scriptArgs []string, wor
 	
 	args = append(args, "/bin/sh", "-c", shellCmd)
 	
-	cmd := exec.Command(prootBin, args...)
+	// 使用 sh -c 包装 proot 命令，绕过 Android SELinux 限制
+	argsStr := strings.Join(args, " ")
+	prootCmd := fmt.Sprintf("exec '%s' %s", prootBin, argsStr)
+	
+	cmd := exec.Command("/system/bin/sh", "-c", prootCmd)
 	cmd.Dir = workDir
 	
 	cleanup := func() {}
