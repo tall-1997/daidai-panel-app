@@ -73,6 +73,8 @@ public class MainActivity extends AppCompatActivity {
         settings.setDomStorageEnabled(true);
         settings.setAllowFileAccess(true);
         settings.setAllowContentAccess(true);
+        settings.setAllowFileAccessFromFileURLs(true);
+        settings.setAllowUniversalAccessFromFileURLs(true);
         settings.setSupportZoom(true);
         settings.setBuiltInZoomControls(true);
         settings.setDisplayZoomControls(false);
@@ -152,10 +154,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startLogOverlayService() {
-        // 检查悬浮窗权限
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (!Settings.canDrawOverlays(this)) {
-                // 请求悬浮窗权限
                 Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                     Uri.parse("package:" + getPackageName()));
                 startActivityForResult(intent, OVERLAY_PERMISSION_REQUEST_CODE);
@@ -198,8 +198,13 @@ public class MainActivity extends AppCompatActivity {
         checkBatteryOptimization();
         
         new Thread(() -> {
+            // 复制前端资源
             copyWebAssetsSync();
-            handler.post(() -> startPanelService());
+            
+            handler.post(() -> {
+                // 直接加载本地 HTML
+                loadLocalPanel();
+            });
         }).start();
     }
 
@@ -296,60 +301,28 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void startPanelService() {
-        Log.d(TAG, "=== startPanelService ===");
-        showLoading("正在启动面板服务...");
+    /**
+     * 直接加载本地面板（WebView 模式）
+     */
+    private void loadLocalPanel() {
+        String webDir = getFilesDir().getAbsolutePath() + "/web";
+        String indexPath = webDir + "/index.html";
+        File indexFile = new File(indexPath);
         
-        Intent serviceIntent = new Intent(this, PanelService.class);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(serviceIntent);
+        Log.d(TAG, "=== loadLocalPanel ===");
+        Log.d(TAG, "Index file: " + indexPath);
+        Log.d(TAG, "Exists: " + indexFile.exists());
+        
+        if (indexFile.exists()) {
+            String url = "file://" + indexPath;
+            Log.d(TAG, "Loading: " + url);
+            showLoading("正在加载面板...");
+            
+            webView.setVisibility(View.VISIBLE);
+            webView.loadUrl(url);
         } else {
-            startService(serviceIntent);
+            showError("前端资源未找到，请重新安装应用");
         }
-        
-        waitForServer();
-    }
-
-    private void waitForServer() {
-        Log.d(TAG, "=== waitForServer ===");
-        
-        new Thread(() -> {
-            int maxWait = 60;
-            int waited = 0;
-            
-            while (waited < maxWait) {
-                try {
-                    Thread.sleep(1000);
-                    waited++;
-                    
-                    boolean running = panelManager.isServerRunning();
-                    Log.d(TAG, "Server check: " + running + " (" + waited + "s)");
-                    
-                    if (running) {
-                        Log.d(TAG, "=== Server ready! ===");
-                        handler.post(() -> loadPanel());
-                        return;
-                    }
-                    
-                    final int progress = waited;
-                    handler.post(() -> showLoading("正在启动面板服务... (" + progress + "s)"));
-                } catch (InterruptedException e) {
-                    break;
-                }
-            }
-            
-            Log.e(TAG, "=== Server timeout ===");
-            handler.post(() -> showError("面板服务启动超时，请重启应用"));
-        }).start();
-    }
-
-    private void loadPanel() {
-        String url = panelManager.getServerURL();
-        Log.d(TAG, "Loading: " + url);
-        showLoading("正在加载面板页面...");
-        
-        webView.setVisibility(View.VISIBLE);
-        webView.loadUrl(url);
     }
 
     private void showLoading(String message) {
