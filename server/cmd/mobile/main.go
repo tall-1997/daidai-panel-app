@@ -27,32 +27,41 @@ import (
 )
 
 func main() {
+	// 立即输出到stderr，确保Android能捕获
+	fmt.Fprintf(os.Stderr, "[daidai] 进程启动\n")
+
 	dataDir := flag.String("data-dir", "", "数据目录路径")
 	webDir := flag.String("web-dir", "", "前端资源目录路径")
 	port := flag.Int("port", 5701, "监听端口")
 	flag.Parse()
 
+	fmt.Fprintf(os.Stderr, "[daidai] 参数: data-dir=%s, web-dir=%s, port=%d\n", *dataDir, *webDir, *port)
+
 	if *dataDir == "" {
-		fmt.Println("错误: 必须指定 -data-dir 参数")
-		flag.Usage()
+		fmt.Fprintf(os.Stderr, "[daidai] 错误: 必须指定 -data-dir 参数\n")
 		os.Exit(1)
 	}
 
 	// 确保目录存在
 	if err := os.MkdirAll(*dataDir, 0755); err != nil {
-		log.Fatalf("创建数据目录失败: %v", err)
+		fmt.Fprintf(os.Stderr, "[daidai] 创建数据目录失败: %v\n", err)
+		os.Exit(1)
 	}
 
 	// 生成配置文件
 	configPath := filepath.Join(*dataDir, "config.yaml")
+	fmt.Fprintf(os.Stderr, "[daidai] 生成配置文件: %s\n", configPath)
 	if err := generateConfig(configPath, *dataDir, *webDir, *port); err != nil {
-		log.Fatalf("生成配置文件失败: %v", err)
+		fmt.Fprintf(os.Stderr, "[daidai] 生成配置文件失败: %v\n", err)
+		os.Exit(1)
 	}
 
 	// 加载配置
+	fmt.Fprintf(os.Stderr, "[daidai] 加载配置...\n")
 	cfg, err := config.Load(configPath)
 	if err != nil {
-		log.Fatalf("加载配置失败: %v", err)
+		fmt.Fprintf(os.Stderr, "[daidai] 加载配置失败: %v\n", err)
+		os.Exit(1)
 	}
 
 	panelWriter := setupPanelLog(cfg.Data.Dir)
@@ -60,8 +69,10 @@ func main() {
 	gin.DefaultWriter = service.NewPanelLogFilterWriter(panelWriter)
 	gin.DefaultErrorWriter = service.NewPanelLogFilterWriter(panelWriter)
 
+	fmt.Fprintf(os.Stderr, "[daidai] 初始化应用...\n")
 	if err := appboot.InitWithConfig(cfg); err != nil {
-		log.Fatalf("初始化失败: %v", err)
+		fmt.Fprintf(os.Stderr, "[daidai] 初始化失败: %v\n", err)
+		os.Exit(1)
 	}
 
 	service.ReconcileDependenciesAfterRestart()
@@ -99,12 +110,16 @@ func main() {
 	setupStaticFrontend(engine, cfg.Server.WebDir)
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
+	fmt.Fprintf(os.Stderr, "[daidai] 监听端口: %s\n", addr)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Fatalf("监听失败: %v", err)
+		fmt.Fprintf(os.Stderr, "[daidai] 监听失败: %v\n", err)
+		os.Exit(1)
 	}
 
-	fmt.Printf("呆呆面板已启动，端口: %d\n", cfg.Server.Port)
+	// 关键：输出到stdout，确保Android能捕获
+	fmt.Println("呆呆面板已启动，端口: " + fmt.Sprintf("%d", cfg.Server.Port))
+	fmt.Fprintf(os.Stderr, "[daidai] 服务器就绪\n")
 
 	server := &http.Server{Handler: engine}
 	serverErr := make(chan error, 1)
@@ -119,14 +134,15 @@ func main() {
 	select {
 	case err := <-serverErr:
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("服务器错误: %v", err)
+			fmt.Fprintf(os.Stderr, "[daidai] 服务器错误: %v\n", err)
+			os.Exit(1)
 		}
 	case sig := <-shutdownSignals:
-		log.Printf("收到信号 %s，正在关闭...", sig)
+		fmt.Fprintf(os.Stderr, "[daidai] 收到信号 %s，正在关闭...\n", sig)
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		if err := server.Shutdown(ctx); err != nil {
-			log.Printf("关闭失败: %v", err)
+			fmt.Fprintf(os.Stderr, "[daidai] 关闭失败: %v\n", err)
 			_ = server.Close()
 		}
 	}
