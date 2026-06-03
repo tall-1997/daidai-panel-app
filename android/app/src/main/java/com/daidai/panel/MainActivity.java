@@ -38,6 +38,9 @@ public class MainActivity extends AppCompatActivity {
     private static final int PERMISSION_REQUEST_CODE = 1001;
     private static final int OVERLAY_PERMISSION_REQUEST_CODE = 1002;
     
+    // 静态变量，用于在 Activity 和 Service 之间共享 auth token
+    public static String authToken = null;
+    
     private WebView webView;
     private ProgressBar progressBar;
     private TextView statusText;
@@ -82,12 +85,49 @@ public class MainActivity extends AppCompatActivity {
             settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         }
         
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public void onProgressChanged(WebView view, int newProgress) {
+                super.onProgressChanged(view, newProgress);
+                if (progressBar != null) {
+                    progressBar.setProgress(newProgress);
+                }
+            }
+        });
+        
+        // 添加 JavaScript Interface 用于获取 auth token
+        webView.addJavascriptInterface(new Object() {
+            @android.webkit.JavascriptInterface
+            public void setAuthToken(String token) {
+                authToken = token;
+                Log.d(TAG, "Auth token updated");
+            }
+            
+            @android.webkit.JavascriptInterface
+            public String getAuthToken() {
+                return authToken;
+            }
+        }, "AndroidBridge");
+        
+        // 页面加载完成后注入 JavaScript 来获取 token
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
                 Log.d(TAG, "Page finished: " + url);
                 hideLoading();
+                
+                // 注入 JavaScript 来获取 auth token
+                view.evaluateJavascript(
+                    "(function() { " +
+                    "  var token = localStorage.getItem('access_token'); " +
+                    "  if (token && window.AndroidBridge) { " +
+                    "    window.AndroidBridge.setAuthToken(token); " +
+                    "  } " +
+                    "  return token; " +
+                    "})()",
+                    null
+                );
             }
 
             @Override
@@ -96,16 +136,6 @@ public class MainActivity extends AppCompatActivity {
                 Log.e(TAG, "WebView error: " + error.getDescription());
                 if (request.isForMainFrame()) {
                     showError("页面加载失败: " + error.getDescription());
-                }
-            }
-        });
-        
-        webView.setWebChromeClient(new WebChromeClient() {
-            @Override
-            public void onProgressChanged(WebView view, int newProgress) {
-                super.onProgressChanged(view, newProgress);
-                if (progressBar != null) {
-                    progressBar.setProgress(newProgress);
                 }
             }
         });
