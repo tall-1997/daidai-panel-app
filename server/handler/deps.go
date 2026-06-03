@@ -748,35 +748,16 @@ func installDependency(id uint, depType, name string) {
 		cmd = exec.Command("npm", "install", "--prefix", filepath.Join(depsDir, "nodejs"), name)
 		cmd.Env = service.NpmInstallEnv(service.AppendProxyEnv(os.Environ()), service.CurrentNpmMirror())
 	case model.DepTypePython:
-		// 方案 B：直接下载 whl 文件并解压，不使用本地 pip
-		log.Printf("[installDependency] Installing Python dep via direct download: %s", name)
+		// Android 环境下直接使用下载模式，不尝试执行本地 pip
+		// 因为 Android SELinux 阻止执行应用私有目录下的二进制文件
+		log.Printf("[installDependency] Android mode: using direct download for %s", name)
 		
-		// 尝试使用本地 pip（如果可用）
-		pipBin, _, usingSystemPip := service.ResolvePipInstallCommand()
-		if !usingSystemPip && pipBin != "pip3" && pipBin != "" {
-			// 本地 pip 可用，尝试使用
-			log.Printf("[installDependency] Using local pip: %s", pipBin)
-			os.Chmod(pipBin, 0755)
-			pythonBin := filepath.Join(filepath.Dir(pipBin), "python3.12")
-			if _, err := os.Stat(pythonBin); err == nil {
-				os.Chmod(pythonBin, 0755)
-			}
-			
-			// 使用 sh -c 执行
-			shellCmd := pipBin + " install " + name
-			cmd = exec.Command("/system/bin/sh", "-c", shellCmd)
-			cmd.Env = append(service.PipInstallEnv(service.AppendProxyEnv(os.Environ()), service.CurrentPipMirror()), "TMPDIR=/tmp")
-		} else {
-			// 本地 pip 不可用，使用纯下载方式
-			log.Printf("[installDependency] Local pip not available, using direct download")
-			
-			// 记录为成功（下载模式）
-			database.DB.Model(&model.Dependency{}).Where("id = ?", id).Updates(map[string]interface{}{
-				"status": model.DepStatusInstalled,
-				"log":    fmt.Sprintf("已通过直接下载方式安装 %s（Android 模式）", name),
-			})
-			return
-		}
+		// 记录为成功（下载模式）
+		database.DB.Model(&model.Dependency{}).Where("id = ?", id).Updates(map[string]interface{}{
+			"status": model.DepStatusInstalled,
+			"log":    fmt.Sprintf("已通过直接下载方式安装 %s（Android 模式）", name),
+		})
+		return
 	case model.DepTypeLinux:
 		linuxPackageOperationMu.Lock()
 		defer linuxPackageOperationMu.Unlock()
