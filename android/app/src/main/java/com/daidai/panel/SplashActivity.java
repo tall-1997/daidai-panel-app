@@ -9,7 +9,6 @@ import android.os.Looper;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -19,16 +18,22 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
 public class SplashActivity extends AppCompatActivity {
     private static final String TAG = "SplashActivity";
+    
+    // 阿里云镜像源
+    private static final String PYTHON_URL = "https://mirrors.aliyun.com/python-build-standalone/20240415/cpython-3.12.3+20240415-aarch64-unknown-linux-gnu-install_only.tar.gz";
+    private static final String NODE_URL = "https://npmmirror.com/mirrors/node/v20.17.0/node-v20.17.0-linux-arm64.tar.gz";
     
     private TextView statusText;
     private TextView pythonStatus;
@@ -47,7 +52,6 @@ public class SplashActivity extends AppCompatActivity {
     private boolean nodeInstalled = false;
     private boolean isDownloading = false;
     
-    // 文件选择器
     private ActivityResultLauncher<Intent> filePickerLauncher;
 
     @Override
@@ -57,7 +61,6 @@ public class SplashActivity extends AppCompatActivity {
         
         handler = new Handler(Looper.getMainLooper());
         
-        // 初始化文件选择器
         filePickerLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
             result -> {
@@ -97,19 +100,15 @@ public class SplashActivity extends AppCompatActivity {
         statusText.setText("正在检查环境...");
         
         new Thread(() -> {
-            try {
-                Thread.sleep(500);
-            } catch (InterruptedException e) {
-                // ignore
-            }
+            try { Thread.sleep(500); } catch (InterruptedException e) { /* ignore */ }
             
             pythonInstalled = checkPythonInstalled();
-            handler.post(() -> updatePythonStatus(pythonInstalled));
-            
             nodeInstalled = checkNodeInstalled();
-            handler.post(() -> updateNodeStatus(nodeInstalled));
             
             handler.post(() -> {
+                updatePythonStatus(pythonInstalled);
+                updateNodeStatus(nodeInstalled);
+                
                 if (pythonInstalled && nodeInstalled) {
                     showReady();
                 } else {
@@ -122,39 +121,23 @@ public class SplashActivity extends AppCompatActivity {
     private boolean checkPythonInstalled() {
         String dataDir = getFilesDir().getAbsolutePath() + "/Dumb-Panel";
         String pythonBin = dataDir + "/deps/bin/python/bin/python3.12";
-        File file = new File(pythonBin);
-        boolean exists = file.exists();
-        Log.d(TAG, "Python check: " + exists + " (" + pythonBin + ")");
-        return exists;
+        return new File(pythonBin).exists();
     }
 
     private boolean checkNodeInstalled() {
         String dataDir = getFilesDir().getAbsolutePath() + "/Dumb-Panel";
         String nodeBin = dataDir + "/deps/bin/node/bin/node";
-        File file = new File(nodeBin);
-        boolean exists = file.exists();
-        Log.d(TAG, "Node check: " + exists + " (" + nodeBin + ")");
-        return exists;
+        return new File(nodeBin).exists();
     }
 
     private void updatePythonStatus(boolean installed) {
-        if (installed) {
-            pythonStatus.setText("已安装");
-            pythonStatus.setTextColor(0xFF4CAF50);
-        } else {
-            pythonStatus.setText("未安装");
-            pythonStatus.setTextColor(0xFFFF9800);
-        }
+        pythonStatus.setText(installed ? "已安装" : "未安装");
+        pythonStatus.setTextColor(installed ? 0xFF4CAF50 : 0xFFFF9800);
     }
 
     private void updateNodeStatus(boolean installed) {
-        if (installed) {
-            nodeStatus.setText("已安装");
-            nodeStatus.setTextColor(0xFF4CAF50);
-        } else {
-            nodeStatus.setText("未安装");
-            nodeStatus.setTextColor(0xFFFF9800);
-        }
+        nodeStatus.setText(installed ? "已安装" : "未安装");
+        nodeStatus.setTextColor(installed ? 0xFF4CAF50 : 0xFFFF9800);
     }
 
     private void showReady() {
@@ -180,16 +163,42 @@ public class SplashActivity extends AppCompatActivity {
         downloadButton.setEnabled(false);
         downloadButton.setText("下载中...");
         downloadArea.setVisibility(View.VISIBLE);
+        statusText.setText("正在下载运行时...");
         
         new Thread(() -> {
+            String dataDir = getFilesDir().getAbsolutePath() + "/Dumb-Panel";
+            
+            // 下载 Python
             if (!pythonInstalled) {
-                downloadRuntime("python");
+                handler.post(() -> {
+                    downloadStatus.setText("正在下载 Python...");
+                    downloadProgress.setProgress(0);
+                    downloadPercent.setText("0%");
+                });
+                
+                boolean success = downloadAndExtract(PYTHON_URL, 
+                    dataDir + "/deps/bin/python", 
+                    "python");
+                
+                if (success) {
+                    createPythonSymlinks(dataDir + "/deps/bin/python/bin");
+                }
             }
             
+            // 下载 Node.js
             if (!nodeInstalled) {
-                downloadRuntime("node");
+                handler.post(() -> {
+                    downloadStatus.setText("正在下载 Node.js...");
+                    downloadProgress.setProgress(0);
+                    downloadPercent.setText("0%");
+                });
+                
+                downloadAndExtract(NODE_URL, 
+                    dataDir + "/deps/bin/node", 
+                    "node");
             }
             
+            // 重新检查
             pythonInstalled = checkPythonInstalled();
             nodeInstalled = checkNodeInstalled();
             
@@ -203,94 +212,162 @@ public class SplashActivity extends AppCompatActivity {
                 if (pythonInstalled && nodeInstalled) {
                     showReady();
                     statusText.setText("下载完成！请点击启动面板");
+                    Toast.makeText(this, "运行时下载完成", Toast.LENGTH_LONG).show();
                 } else {
                     downloadButton.setEnabled(true);
                     downloadButton.setText("重试下载");
                     statusText.setText("下载失败，请重试或本地导入");
+                    Toast.makeText(this, "下载失败，请检查网络", Toast.LENGTH_LONG).show();
                 }
             });
         }).start();
     }
 
-    private void downloadRuntime(String name) {
-        Log.d(TAG, "Downloading " + name + "...");
-        handler.post(() -> {
-            downloadStatus.setText("正在下载 " + name + "...");
-            downloadProgress.setProgress(0);
-            downloadPercent.setText("0%");
-        });
-        
+    private boolean downloadAndExtract(String urlStr, String targetDir, String name) {
         try {
-            String token = MainActivity.authToken;
-            if (token == null) {
-                Log.e(TAG, "Auth token is null");
-                return;
+            Log.d(TAG, "Downloading: " + urlStr);
+            
+            // 清理旧目录
+            File dir = new File(targetDir);
+            if (dir.exists()) {
+                deleteRecursive(dir);
             }
+            dir.mkdirs();
             
-            String url = "http://127.0.0.1:5701/api/v1/android-runtime/install";
-            HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
-            conn.setRequestMethod("POST");
-            conn.setRequestProperty("Content-Type", "application/json");
-            conn.setRequestProperty("Authorization", "Bearer " + token);
-            conn.setDoOutput(true);
-            conn.setConnectTimeout(10000);
+            // 下载文件
+            URL url = new URL(urlStr);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setConnectTimeout(30000);
             conn.setReadTimeout(300000);
-            
-            String body = "{\"name\":\"" + name + "\"}";
-            conn.getOutputStream().write(body.getBytes());
+            conn.setRequestProperty("User-Agent", "DaidaiPanel/1.0");
             
             int responseCode = conn.getResponseCode();
-            Log.d(TAG, "Install API response: " + responseCode);
+            Log.d(TAG, "Response code: " + responseCode);
             
-            if (responseCode == 200) {
-                InputStream is = conn.getInputStream();
-                byte[] buffer = new byte[1024];
-                int bytesRead;
-                long totalRead = 0;
-                
-                while ((bytesRead = is.read(buffer)) != -1) {
-                    totalRead += bytesRead;
-                    // 解析 SSE 数据
-                    String data = new String(buffer, 0, bytesRead);
-                    if (data.contains("data: ")) {
-                        String[] lines = data.split("\n");
-                        for (String line : lines) {
-                            if (line.startsWith("data: ")) {
-                                String msg = line.substring(6).trim();
-                                Log.d(TAG, "SSE: " + msg);
-                                handler.post(() -> downloadStatus.setText(msg));
-                            }
-                        }
-                    }
-                }
-                is.close();
+            if (responseCode != 200) {
+                Log.e(TAG, "Download failed: HTTP " + responseCode);
+                handler.post(() -> Toast.makeText(this, "下载失败: HTTP " + responseCode, Toast.LENGTH_LONG).show());
+                return false;
             }
             
+            long fileSize = conn.getContentLengthLong();
+            Log.d(TAG, "File size: " + fileSize);
+            
+            // 下载到临时文件
+            File tmpFile = new File(targetDir + ".tar.gz");
+            FileOutputStream fos = new FileOutputStream(tmpFile);
+            InputStream is = conn.getInputStream();
+            
+            byte[] buffer = new byte[8192];
+            long totalRead = 0;
+            int bytesRead;
+            int lastProgress = 0;
+            
+            while ((bytesRead = is.read(buffer)) != -1) {
+                fos.write(buffer, 0, bytesRead);
+                totalRead += bytesRead;
+                
+                // 更新进度
+                if (fileSize > 0) {
+                    int progress = (int) (totalRead * 100 / fileSize);
+                    if (progress != lastProgress) {
+                        lastProgress = progress;
+                        final int p = progress;
+                        final long downloaded = totalRead;
+                        handler.post(() -> {
+                            downloadProgress.setProgress(p);
+                            downloadPercent.setText(p + "%");
+                            downloadStatus.setText(String.format("正在下载 %s... (%.1f MB)", 
+                                name, downloaded / 1024.0 / 1024.0));
+                        });
+                    }
+                }
+            }
+            
+            fos.flush();
+            fos.close();
+            is.close();
             conn.disconnect();
+            
+            Log.d(TAG, "Download complete: " + tmpFile.getAbsolutePath());
+            
+            // 解压
+            handler.post(() -> downloadStatus.setText("正在解压 " + name + "..."));
+            
+            ProcessBuilder pb = new ProcessBuilder(
+                "tar", "xzf", tmpFile.getAbsolutePath(), 
+                "-C", targetDir, 
+                "--strip-components=1"
+            );
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+            
+            // 读取输出
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            while (reader.readLine() != null) { /* drain */ }
+            
+            int exitCode = process.waitFor();
+            Log.d(TAG, "Extract exit code: " + exitCode);
+            
+            // 删除临时文件
+            tmpFile.delete();
+            
+            if (exitCode == 0) {
+                Log.d(TAG, "Extract complete: " + targetDir);
+                return true;
+            } else {
+                Log.e(TAG, "Extract failed");
+                return false;
+            }
             
         } catch (Exception e) {
             Log.e(TAG, "Download failed", e);
             handler.post(() -> Toast.makeText(this, "下载失败: " + e.getMessage(), Toast.LENGTH_LONG).show());
+            return false;
+        }
+    }
+
+    private void createPythonSymlinks(String binDir) {
+        String[][] symlinks = {
+            {"python", "python3.12"},
+            {"python3", "python3.12"},
+            {"pip", "pip3.12"},
+            {"pip3", "pip3.12"}
+        };
+        
+        for (String[] symlink : symlinks) {
+            try {
+                File link = new File(binDir, symlink[0]);
+                File target = new File(binDir, symlink[1]);
+                if (target.exists()) {
+                    link.delete();
+                    new ProcessBuilder("ln", "-sf", symlink[1], link.getAbsolutePath())
+                        .start()
+                        .waitFor();
+                    Log.d(TAG, "Created symlink: " + symlink[0] + " -> " + symlink[1]);
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to create symlink", e);
+            }
         }
     }
 
     private void openFilePicker() {
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-        intent.setType("*/*");
+        intent.setType("application/gzip");
         intent.addCategory(Intent.CATEGORY_OPENABLE);
-        filePickerLauncher.launch(Intent.createChooser(intent, "选择运行时文件"));
+        filePickerLauncher.launch(Intent.createChooser(intent, "选择运行时文件 (.tar.gz)"));
     }
 
     private void handleImportedFile(Uri uri) {
         Toast.makeText(this, "正在导入文件...", Toast.LENGTH_SHORT).show();
+        statusText.setText("正在导入...");
         
         new Thread(() -> {
             try {
-                // 获取文件名
                 String fileName = getFileName(uri);
                 Log.d(TAG, "Importing file: " + fileName);
                 
-                // 确定目标目录
                 String dataDir = getFilesDir().getAbsolutePath() + "/Dumb-Panel";
                 String targetDir;
                 
@@ -299,29 +376,36 @@ public class SplashActivity extends AppCompatActivity {
                 } else if (fileName.contains("node")) {
                     targetDir = dataDir + "/deps/bin/node";
                 } else {
-                    handler.post(() -> Toast.makeText(this, "无法识别文件类型", Toast.LENGTH_LONG).show());
+                    handler.post(() -> Toast.makeText(this, "无法识别文件类型，请包含 python 或 node 关键字", Toast.LENGTH_LONG).show());
                     return;
                 }
                 
-                // 创建目标目录
+                // 清理旧目录
                 File dir = new File(targetDir);
-                if (dir.exists()) {
-                    deleteRecursive(dir);
-                }
+                if (dir.exists()) deleteRecursive(dir);
                 dir.mkdirs();
                 
-                // 解压文件
+                // 解压
                 InputStream is = getContentResolver().openInputStream(uri);
-                if (fileName.endsWith(".tar.gz") || fileName.endsWith(".tgz")) {
-                    // 解压 tar.gz
-                    extractTarGz(is, targetDir);
-                } else if (fileName.endsWith(".zip")) {
-                    // 解压 zip
-                    extractZip(is, targetDir);
-                } else {
-                    handler.post(() -> Toast.makeText(this, "不支持的文件格式", Toast.LENGTH_LONG).show());
-                    return;
+                ProcessBuilder pb = new ProcessBuilder(
+                    "tar", "xzf", "-", 
+                    "-C", targetDir, 
+                    "--strip-components=1"
+                );
+                pb.redirectErrorStream(true);
+                Process process = pb.start();
+                
+                OutputStream os = process.getOutputStream();
+                byte[] buffer = new byte[4096];
+                int bytesRead;
+                while ((bytesRead = is.read(buffer)) != -1) {
+                    os.write(buffer, 0, bytesRead);
                 }
+                os.close();
+                is.close();
+                
+                int exitCode = process.waitFor();
+                Log.d(TAG, "Extract exit code: " + exitCode);
                 
                 // 创建软链接
                 if (fileName.contains("python")) {
@@ -354,73 +438,14 @@ public class SplashActivity extends AppCompatActivity {
     }
 
     private String getFileName(Uri uri) {
-        String fileName = "unknown";
-        try {
-            InputStream is = getContentResolver().openInputStream(uri);
-            // 尝试从 URI 获取文件名
-            String path = uri.getPath();
-            if (path != null) {
-                int lastSlash = path.lastIndexOf('/');
-                if (lastSlash >= 0) {
-                    fileName = path.substring(lastSlash + 1);
-                }
-            }
-            if (is != null) is.close();
-        } catch (Exception e) {
-            // ignore
-        }
-        return fileName;
-    }
-
-    private void extractTarGz(InputStream is, String targetDir) throws IOException {
-        // 使用 Runtime.exec 调用系统 tar 命令
-        ProcessBuilder pb = new ProcessBuilder("tar", "xzf", "-", "-C", targetDir, "--strip-components=1");
-        pb.redirectErrorStream(true);
-        Process process = pb.start();
-        
-        OutputStream os = process.getOutputStream();
-        byte[] buffer = new byte[4096];
-        int bytesRead;
-        while ((bytesRead = is.read(buffer)) != -1) {
-            os.write(buffer, 0, bytesRead);
-        }
-        os.close();
-        is.close();
-        
-        try {
-            process.waitFor();
-        } catch (InterruptedException e) {
-            // ignore
-        }
-    }
-
-    private void extractZip(InputStream is, String targetDir) throws IOException {
-        // 简单的 zip 解压实现
-        // 实际项目中建议使用 java.util.zip
-        Toast.makeText(this, "ZIP 格式暂不支持，请使用 tar.gz 格式", Toast.LENGTH_LONG).show();
-    }
-
-    private void createPythonSymlinks(String binDir) {
-        String[][] symlinks = {
-            {"python", "python3.12"},
-            {"python3", "python3.12"},
-            {"pip", "pip3.12"},
-            {"pip3", "pip3.12"}
-        };
-        
-        for (String[] symlink : symlinks) {
-            try {
-                File link = new File(binDir, symlink[0]);
-                File target = new File(binDir, symlink[1]);
-                if (target.exists()) {
-                    link.delete();
-                    // 创建软链接
-                    Runtime.getRuntime().exec("ln -sf " + symlink[1] + " " + link.getAbsolutePath());
-                }
-            } catch (Exception e) {
-                Log.e(TAG, "Failed to create symlink", e);
+        String path = uri.getPath();
+        if (path != null) {
+            int lastSlash = path.lastIndexOf('/');
+            if (lastSlash >= 0) {
+                return path.substring(lastSlash + 1);
             }
         }
+        return "unknown.tar.gz";
     }
 
     private void deleteRecursive(File file) {
