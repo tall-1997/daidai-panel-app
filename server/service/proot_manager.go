@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
+	"unsafe"
 )
 
 // ProotManager 管理 Alpine + proot 环境
@@ -18,6 +20,22 @@ type ProotManager struct {
 	rootfsDir   string
 	prootBin    string
 	dataDir     string
+	prootFdPath string // /proc/self/fd/N 路径，用于从内存执行 proot
+}
+
+const memfdCreateSyscall = 319 // SYS_MEMFD_CREATE for arm64
+
+// memfdCreate 创建内存文件描述符
+func memfdCreate(name string, flags int) (int, error) {
+	namePtr, err := syscall.BytePtrFromString(name)
+	if err != nil {
+		return 0, err
+	}
+	fd, _, errno := syscall.Syscall(memfdCreateSyscall, uintptr(unsafe.Pointer(namePtr)), uintptr(flags), 0)
+	if errno != 0 {
+		return 0, errno
+	}
+	return int(fd), nil
 }
 
 var prootManager = &ProotManager{}
@@ -71,8 +89,55 @@ func (pm *ProotManager) SetInitialized(dataDir string, prootBin string) {
 	pm.dataDir = dataDir
 	pm.rootfsDir = filepath.Join(dataDir, "alpine")
 	pm.prootBin = prootBin
+	
+	// 尝试使用 memfd_create 将 proot 加载到内存中执行
+	// 这样可以绕过 Android 的 noexec 和 SELinux 限制
+	if fd, err := loadBinaryToMemfd(prootBin); err == nil {
+		pm.prootFdPath = fmt.Sprintf("/proc/self/fd/%d", fd)
+		log.Printf("[ProotManager] Proot loaded to memfd: %s", pm.prootFdPath)
+	} else {
+		log.Printf("[ProotManager] Failed to load proot to memfd: %v, falling back to direct path", err)
+		pm.prootFdPath = ""
+	}
+	
 	pm.initialized = true
-	log.Printf("[ProotManager] Alpine rootfs initialized by Java: %s, proot: %s", pm.rootfsDir, pm.prootBin)
+	log.Printf("[ProotManager] Alpine rootfs initialized by Java: %s, proot: %s, memfd: %s", pm.rootfsDir, pm.prootBin, pm.prootFdPath)
+}
+
+// loadBinaryToMemfd 将二进制文件加载到内存文件描述符
+func loadBinaryToMemfd(path string) (int, error) {
+	// 读取二进制文件
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read binary: %v", err)
+	}
+	
+	// 创建内存文件描述符
+	fd, err := memfdCreate("proot", 0)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create memfd: %v", err)
+	}
+	
+	// 写入数据到 memfd
+	if _, err := syscall.Write(fd, data); err != nil {
+		syscall.Close(fd)
+		return 0, fmt.Errorf("failed to write to memfd: %v", err)
+	}
+	
+	// 设置为可执行（通过 fchmod）
+	if err := syscall.Fchmod(fd, 0755); err != nil {
+		log.Printf("[ProotManager] Warning: fchmod failed: %v", err)
+	}
+	
+	return fd, nil
+}
+
+// getProotPath 获取 proot 可执行路径
+func (pm *ProotManager) getProotPath() string {
+	if pm.prootFdPath != "" {
+		return pm.prootFdPath
+	}
+	return pm.prootBin
 }
 
 // IsInitialized 检查是否已初始化
@@ -91,12 +156,12 @@ func (pm *ProotManager) ExecInAlpine(command string) (string, error) {
 		return "", fmt.Errorf("Alpine rootfs not initialized")
 	}
 
-	// proot 是动态链接的，需要设置 LD_LIBRARY_PATH 指向 libtalloc.so 所在目录
+	prootPath := pm.getProotPath()
 	prootDir := filepath.Dir(pm.prootBin)
 	
-	// 使用 sh -c 包装 proot 命令，绕过 Android SELinux 限制
+	// 使用 sh -c 包装 proot 命令
 	prootCmd := fmt.Sprintf("LD_LIBRARY_PATH='%s' exec '%s' -R '%s' -w /root -b /dev -b /proc -b /sys /bin/sh -c '%s'",
-		prootDir, pm.prootBin, pm.rootfsDir, command)
+		prootDir, prootPath, pm.rootfsDir, command)
 
 	cmd := exec.Command("/system/bin/sh", "-c", prootCmd)
 	output, err := cmd.CombinedOutput()
@@ -109,7 +174,7 @@ func (pm *ProotManager) ExecInAlpineWithEnv(command string, env map[string]strin
 		return "", fmt.Errorf("Alpine rootfs not initialized")
 	}
 
-	// proot 是动态链接的，需要设置 LD_LIBRARY_PATH 指向 libtalloc.so 所在目录
+	prootPath := pm.getProotPath()
 	prootDir := filepath.Dir(pm.prootBin)
 
 	// 构建环境变量参数
@@ -118,9 +183,9 @@ func (pm *ProotManager) ExecInAlpineWithEnv(command string, env map[string]strin
 		envArgs += fmt.Sprintf("export %s='%s'; ", k, v)
 	}
 
-	// 使用 sh -c 包装 proot 命令，绕过 Android SELinux 限制
+	// 使用 sh -c 包装 proot 命令
 	prootCmd := fmt.Sprintf("LD_LIBRARY_PATH='%s' %s exec '%s' -R '%s' -w /root -b /dev -b /proc -b /sys /bin/sh -c '%s'",
-		prootDir, envArgs, pm.prootBin, pm.rootfsDir, command)
+		prootDir, envArgs, prootPath, pm.rootfsDir, command)
 
 	cmd := exec.Command("/system/bin/sh", "-c", prootCmd)
 	output, err := cmd.CombinedOutput()

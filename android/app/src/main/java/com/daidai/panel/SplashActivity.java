@@ -141,6 +141,23 @@ public class SplashActivity extends AppCompatActivity {
                 Log.d(TAG, "Alpine rootfs already exists");
             }
             
+            // 复制 proot 从 assets 到 dataDir
+            File prootDst = new File(dataDir, "proot");
+            if (!prootDst.exists()) {
+                Log.d(TAG, "Copying proot from assets...");
+                InputStream in = getAssets().open("alpine/proot");
+                FileOutputStream fos = new FileOutputStream(prootDst);
+                byte[] buffer = new byte[4096];
+                int read;
+                while ((read = in.read(buffer)) != -1) {
+                    fos.write(buffer, 0, read);
+                }
+                fos.flush();
+                fos.close();
+                in.close();
+                Log.d(TAG, "Proot copied to: " + prootDst.getAbsolutePath());
+            }
+            
             // 设置 DNS
             File resolvConf = new File(alpineDir, "etc/resolv.conf");
             if (!resolvConf.exists()) {
@@ -153,9 +170,8 @@ public class SplashActivity extends AppCompatActivity {
             Log.d(TAG, "Alpine environment initialized");
             
             // 通知 Go 代码 Alpine 环境已就绪
-            // proot 在 nativeLibraryDir 中，有执行权限
-            String nativeLibDir = getApplicationInfo().nativeLibraryDir;
-            String prootPath = new File(nativeLibDir, "libproot.so").getAbsolutePath();
+            // Go 会将 proot 加载到内存中执行（memfd_create）
+            String prootPath = new File(dataDir, "proot").getAbsolutePath();
             Log.d(TAG, "Notifying Go that Alpine is ready, proot: " + prootPath);
             PanelManager.getInstance(this).setAlpineReady(dataDir, prootPath);
             

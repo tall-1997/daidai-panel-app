@@ -150,6 +150,7 @@ func CreateManagedCommand(interpreter, scriptPath string, scriptArgs []string, w
 // createProotCommand 使用 Alpine + proot 创建命令
 func createProotCommand(interpreter, scriptPath string, scriptArgs []string, workDir string, envVars map[string]string) (*exec.Cmd, func(), error) {
 	prootMgr := GetProotManager()
+	prootPath := prootMgr.getProotPath()
 	prootBin := prootMgr.prootBin
 	rootfsDir := prootMgr.rootfsDir
 	prootDir := filepath.Dir(prootBin)
@@ -183,7 +184,7 @@ func createProotCommand(interpreter, scriptPath string, scriptArgs []string, wor
 	
 	// 使用 sh -c 包装 proot 命令，设置 LD_LIBRARY_PATH
 	argsStr := strings.Join(prootArgs, " ")
-	prootCmd := fmt.Sprintf("LD_LIBRARY_PATH='%s' exec '%s' %s", prootDir, prootBin, argsStr)
+	prootCmd := fmt.Sprintf("LD_LIBRARY_PATH='%s' exec '%s' %s", prootDir, prootPath, argsStr)
 	
 	cmd := exec.Command("/system/bin/sh", "-c", prootCmd)
 	cmd.Dir = workDir

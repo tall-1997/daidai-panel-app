@@ -75,10 +75,7 @@ public class MainActivity extends AppCompatActivity {
                 
                 // 检查 Alpine 是否已初始化（由 SplashActivity 完成）
                 File alpineBin = new File(dataDir, "alpine/bin/sh");
-                
-                // proot 在 nativeLibraryDir 中
-                String nativeLibDir = getApplicationInfo().nativeLibraryDir;
-                File proot = new File(nativeLibDir, "libproot.so");
+                File proot = new File(dataDir, "proot");
                 
                 if (alpineBin.exists() && proot.exists()) {
                     Log.d(TAG, "Alpine environment already initialized by SplashActivity");
