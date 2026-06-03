@@ -141,7 +141,7 @@ public class SplashActivity extends AppCompatActivity {
                 Log.d(TAG, "Alpine rootfs already exists");
             }
             
-            // 复制 proot 从 assets 到 dataDir
+            // 复制 proot 和 libtalloc.so.2 从 assets 到 dataDir
             File prootDst = new File(dataDir, "proot");
             if (!prootDst.exists()) {
                 Log.d(TAG, "Copying proot from assets...");
@@ -156,6 +156,23 @@ public class SplashActivity extends AppCompatActivity {
                 fos.close();
                 in.close();
                 Log.d(TAG, "Proot copied to: " + prootDst.getAbsolutePath());
+            }
+            
+            // 复制 libtalloc.so.2（proot 的依赖库）
+            File libtallocDst = new File(dataDir, "libtalloc.so.2");
+            if (!libtallocDst.exists()) {
+                Log.d(TAG, "Copying libtalloc.so.2 from assets...");
+                InputStream in = getAssets().open("alpine/libtalloc.so.2");
+                FileOutputStream fos = new FileOutputStream(libtallocDst);
+                byte[] buffer = new byte[4096];
+                int read;
+                while ((read = in.read(buffer)) != -1) {
+                    fos.write(buffer, 0, read);
+                }
+                fos.flush();
+                fos.close();
+                in.close();
+                Log.d(TAG, "libtalloc.so.2 copied to: " + libtallocDst.getAbsolutePath());
             }
             
             // 设置 DNS
