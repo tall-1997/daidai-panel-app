@@ -8,8 +8,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sync"
 	"unicode/utf8"
+
+	"daidai-panel/config"
 )
 
 type TinyLog struct {
@@ -24,14 +27,20 @@ type TinyLog struct {
 }
 
 func NewTinyLog(logID string) (*TinyLog, error) {
-	// 使用应用私有目录而不是系统临时目录
-	// Android 上 /data/local/tmp 可能没有写入权限
-	tmpDir := os.TempDir()
-	if tmpDir == "" || tmpDir == "/tmp" {
-		// 如果临时目录不可用，使用当前目录
+	// 使用应用数据目录而不是系统临时目录
+	// Android 上 /data/local/tmp 没有写入权限
+	tmpDir := ""
+	
+	// 尝试使用配置中的数据目录
+	if config.C != nil && config.C.Data.Dir != "" {
+		tmpDir = filepath.Join(config.C.Data.Dir, "tmp")
+	}
+	
+	// 如果配置不可用，使用当前目录
+	if tmpDir == "" {
 		cwd, err := os.Getwd()
 		if err == nil {
-			tmpDir = cwd
+			tmpDir = filepath.Join(cwd, "tmp")
 		} else {
 			tmpDir = "."
 		}
