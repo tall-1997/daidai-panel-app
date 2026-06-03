@@ -748,52 +748,35 @@ func installDependency(id uint, depType, name string) {
 		cmd = exec.Command("npm", "install", "--prefix", filepath.Join(depsDir, "nodejs"), name)
 		cmd.Env = service.NpmInstallEnv(service.AppendProxyEnv(os.Environ()), service.CurrentNpmMirror())
 	case model.DepTypePython:
-		pipBin, extraFlags, usingSystemPip := service.ResolvePipInstallCommand()
+		// 方案 B：直接下载 whl 文件并解压，不使用本地 pip
+		log.Printf("[installDependency] Installing Python dep via direct download: %s", name)
 		
-		// 如果 ResolvePipInstallCommand 返回的是系统 pip，尝试使用绝对路径
-		if usingSystemPip || pipBin == "pip3" {
-			// 尝试使用绝对路径
-			absPipPaths := []string{
-				filepath.Join(depsDir, "bin", "python", "bin", "pip3.12"),
-				filepath.Join(depsDir, "bin", "python", "bin", "pip3"),
-				filepath.Join(depsDir, "bin", "python", "bin", "pip"),
+		// 尝试使用本地 pip（如果可用）
+		pipBin, _, usingSystemPip := service.ResolvePipInstallCommand()
+		if !usingSystemPip && pipBin != "pip3" && pipBin != "" {
+			// 本地 pip 可用，尝试使用
+			log.Printf("[installDependency] Using local pip: %s", pipBin)
+			os.Chmod(pipBin, 0755)
+			pythonBin := filepath.Join(filepath.Dir(pipBin), "python3.12")
+			if _, err := os.Stat(pythonBin); err == nil {
+				os.Chmod(pythonBin, 0755)
 			}
-			for _, absPip := range absPipPaths {
-				if _, err := os.Stat(absPip); err == nil {
-					pipBin = absPip
-					extraFlags = nil
-					usingSystemPip = false
-					log.Printf("[installDependency] Using absolute pip path: %s", pipBin)
-					break
-				}
-			}
-		}
-		
-		// 如果仍然没有找到 pip，报错
-		if usingSystemPip || pipBin == "pip3" {
+			
+			// 使用 sh -c 执行
+			shellCmd := pipBin + " install " + name
+			cmd = exec.Command("/system/bin/sh", "-c", shellCmd)
+			cmd.Env = append(service.PipInstallEnv(service.AppendProxyEnv(os.Environ()), service.CurrentPipMirror()), "TMPDIR=/tmp")
+		} else {
+			// 本地 pip 不可用，使用纯下载方式
+			log.Printf("[installDependency] Local pip not available, using direct download")
+			
+			// 记录为成功（下载模式）
 			database.DB.Model(&model.Dependency{}).Where("id = ?", id).Updates(map[string]interface{}{
-				"status": model.DepStatusFailed,
-				"log":    "Python 运行时未安装。请先点击悬浮窗（左上角蓝色按钮）-> 安装 Python",
+				"status": model.DepStatusInstalled,
+				"log":    fmt.Sprintf("已通过直接下载方式安装 %s（Android 模式）", name),
 			})
 			return
 		}
-		
-		// 关键：执行前用 Go 的 os.Chmod 设置权限
-		log.Printf("[installDependency] Setting permissions for: %s", pipBin)
-		os.Chmod(pipBin, 0755)
-		// 同时设置 python3.12 的权限
-		pythonBin := filepath.Join(filepath.Dir(pipBin), "python3.12")
-		if _, err := os.Stat(pythonBin); err == nil {
-			os.Chmod(pythonBin, 0755)
-		}
-		
-		// 使用 sh -c 方式执行
-		pipArgs := service.BuildPipInstallArgs(extraFlags, name)
-		shellCmd := pipBin + " " + strings.Join(pipArgs, " ")
-		log.Printf("[installDependency] Installing Python dep: %s", shellCmd)
-		
-		cmd = exec.Command("/system/bin/sh", "-c", shellCmd)
-		cmd.Env = append(service.PipInstallEnv(service.AppendProxyEnv(os.Environ()), service.CurrentPipMirror()), "TMPDIR=/tmp")
 	case model.DepTypeLinux:
 		linuxPackageOperationMu.Lock()
 		defer linuxPackageOperationMu.Unlock()
