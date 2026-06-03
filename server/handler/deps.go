@@ -736,16 +736,41 @@ func buildDependencyFailureHint(logText string) string {
 }
 
 func ensureTmpDir() {
-	os.MkdirAll("/tmp", 0o1777)
+	// 使用应用数据目录下的 tmp 目录，而不是 /tmp
+	if config.C != nil && strings.TrimSpace(config.C.Data.Dir) != "" {
+		tmpDir := filepath.Join(config.C.Data.Dir, "tmp")
+		os.MkdirAll(tmpDir, 0o755)
+		os.Setenv("TMPDIR", tmpDir)
+		os.Setenv("TMP", tmpDir)
+		os.Setenv("TEMP", tmpDir)
+		log.Printf("[ensureTmpDir] Using tmp dir: %s", tmpDir)
+	} else {
+		os.MkdirAll("/tmp", 0o1777)
+		log.Printf("[ensureTmpDir] Using /tmp (config not available)")
+	}
 }
 
 func installDependency(id uint, depType, name string) {
 	ensureTmpDir()
 	var cmd *exec.Cmd
 	
-	// 检查 Alpine 环境是否可用
+	// 检查 Alpine 环境是否可用，如果不可用则尝试初始化
 	prootMgr := service.GetProotManager()
 	useAlpine := prootMgr.IsInitialized()
+	
+	if !useAlpine && config.C != nil {
+		// 尝试初始化 Alpine 环境
+		dataDir := config.C.Data.Dir
+		if dataDir != "" {
+			log.Printf("[installDependency] Trying to init Alpine environment...")
+			if err := prootMgr.InitAlpineRootfs(dataDir); err != nil {
+				log.Printf("[installDependency] Failed to init Alpine: %v", err)
+			} else {
+				useAlpine = true
+				log.Printf("[installDependency] Alpine environment initialized")
+			}
+		}
+	}
 	
 	switch depType {
 	case model.DepTypeNodeJS:
@@ -817,8 +842,6 @@ func installDependency(id uint, depType, name string) {
 			})
 		}
 		return
-		linuxPackageOperationMu.Lock()
-		defer linuxPackageOperationMu.Unlock()
 
 		manager, err := detectLinuxPackageManager()
 		if err != nil {
