@@ -778,8 +778,12 @@ func installDependency(id uint, depType, name string) {
 			return
 		}
 		
-		log.Printf("[installDependency] Installing Python dep: %s using %s", name, pipBin)
-		cmd = exec.Command(pipBin, service.BuildPipInstallArgs(extraFlags, name)...)
+		// 使用 sh -c 方式执行，绕过 Android SELinux 限制
+		pipArgs := service.BuildPipInstallArgs(extraFlags, name)
+		shellCmd := pipBin + " " + strings.Join(pipArgs, " ")
+		log.Printf("[installDependency] Installing Python dep: %s using sh -c '%s'", name, shellCmd)
+		
+		cmd = exec.Command("sh", "-c", shellCmd)
 		cmd.Env = append(service.PipInstallEnv(service.AppendProxyEnv(os.Environ()), service.CurrentPipMirror()), "TMPDIR=/tmp")
 	case model.DepTypeLinux:
 		linuxPackageOperationMu.Lock()
