@@ -114,7 +114,11 @@ func (s *MobileServer) Start(dataDir, webDir string, port int) error {
 	// Initialize services
 	service.ReconcileDependenciesAfterRestart()
 	handler.FinalizePendingAutoUpdateOnStartup()
-	service.EnsureBuiltinNotifyHelpers(cfg.Data.ScriptsDir)
+	if err := service.EnsureBuiltinNotifyHelpers(cfg.Data.ScriptsDir); err != nil {
+		log.Printf("[Mobile] Warning: Failed to ensure builtin notify helpers: %v", err)
+	} else {
+		log.Printf("[Mobile] Builtin notify helpers ensured in: %s", cfg.Data.ScriptsDir)
+	}
 	service.CleanupManagedHelperCopiesUnderRoot(cfg.Data.ScriptsDir)
 	service.WarmManagedPythonVenv()
 
