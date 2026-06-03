@@ -193,8 +193,11 @@ func probeRuntime(cmdName string) androidRuntimeItem {
 
 func (h *AndroidRuntimeHandler) Status(c *gin.Context) {
 	androidBinDir := getAndroidBinDir()
+	supported := androidSupported()
 	
-	if !androidSupported() {
+	log.Printf("[AndroidRuntime] Status called, supported=%v, binDir=%s", supported, androidBinDir)
+	
+	if !supported {
 		response.Success(c, androidRuntimeStatus{
 			Supported: false,
 			Arch:      detectArch(),
@@ -216,14 +219,18 @@ func (h *AndroidRuntimeHandler) Status(c *gin.Context) {
 		}
 	}
 
-	response.Success(c, androidRuntimeStatus{
+	result := androidRuntimeStatus{
 		Supported: true,
 		Arch:      arch,
 		BinDir:    androidBinDir,
 		Termux:    termuxDetected(),
 		Runtimes:  runtimes,
 		Presets:   presets,
-	})
+	}
+	
+	log.Printf("[AndroidRuntime] Status result: supported=%v, runtimes=%d, presets=%d", result.Supported, len(result.Runtimes), len(result.Presets))
+	
+	response.Success(c, result)
 }
 
 type androidInstallRequest struct {
