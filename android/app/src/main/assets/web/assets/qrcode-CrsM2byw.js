@@ -1,2 +1,0 @@
-const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/qrcode-C9noc_TR.js","assets/vendor-DPI-s_N-.js","assets/app-core-BF80aBJ8.js"])))=>i.map(i=>d[i]);
-import{b as n}from"./index-LMms9nn8.js";async function c(t,a=220){const{toDataURL:r}=await n(async()=>{const{toDataURL:o}=await import("./qrcode-C9noc_TR.js").then(e=>e.b);return{toDataURL:o}},__vite__mapDeps([0,1,2]));return r(t,{width:a,margin:2})}export{c};

@@ -484,8 +484,12 @@ let androidInstallAbort: AbortController | null = null
 async function loadAndroidStatus() {
   try {
     const res = await androidRuntimeApi.status()
+    console.log('[AndroidRuntime] API response:', res)
+    console.log('[AndroidRuntime] res.data:', res.data)
     androidStatus.value = res.data
+    console.log('[AndroidRuntime] androidStatus.value:', androidStatus.value)
   } catch (e) {
+    console.error('[AndroidRuntime] Error:', e)
     androidStatus.value = null
   }
 }
