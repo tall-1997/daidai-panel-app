@@ -473,6 +473,21 @@ func (h *AndroidRuntimeHandler) Install(c *gin.Context) {
 	if req.Name == "python" {
 		emit("创建 Python 软链接...")
 		binDir := filepath.Join(targetDir, "bin")
+		
+		// 确保 python3.12 存在且可执行
+		python312Path := filepath.Join(binDir, "python3.12")
+		if _, err := os.Stat(python312Path); err != nil {
+			emit("❌ python3.12 不存在: " + python312Path)
+			log.Printf("[AndroidRuntime] python3.12 not found: %v", err)
+		} else {
+			// 设置可执行权限
+			if err := os.Chmod(python312Path, 0755); err != nil {
+				log.Printf("[AndroidRuntime] Failed to chmod python3.12: %v", err)
+			}
+			emit("✅ python3.12 存在: " + python312Path)
+		}
+		
+		// 创建软链接
 		symlinks := map[string]string{
 			"python":  "python3.12",
 			"python3": "python3.12",
@@ -497,17 +512,26 @@ func (h *AndroidRuntimeHandler) Install(c *gin.Context) {
 			}
 		}
 		
-		// 设置可执行权限
-		pythonBin := filepath.Join(binDir, "python3.12")
-		if err := os.Chmod(pythonBin, 0755); err != nil {
-			log.Printf("[AndroidRuntime] Failed to chmod python3.12: %v", err)
+		// 验证所有关键文件
+		emit("验证安装...")
+		filesToCheck := []string{
+			filepath.Join(binDir, "python3.12"),
+			filepath.Join(binDir, "python"),
+			filepath.Join(binDir, "python3"),
+			filepath.Join(binDir, "pip3.12"),
+			filepath.Join(binDir, "pip"),
 		}
-		
-		// 验证
-		if _, err := os.Stat(filepath.Join(binDir, "python")); err == nil {
-			emit("✅ Python 安装成功")
+		allExist := true
+		for _, f := range filesToCheck {
+			if _, err := os.Stat(f); err != nil {
+				emit("❌ 文件不存在: " + f)
+				allExist = false
+			}
+		}
+		if allExist {
+			emit("✅ Python 安装成功，所有文件验证通过")
 		} else {
-			emit("❌ Python 安装失败：软链接未创建")
+			emit("❌ Python 安装不完整")
 		}
 	}
 	
