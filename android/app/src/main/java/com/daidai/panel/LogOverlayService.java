@@ -5,15 +5,18 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.BroadcastReceiver;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.PixelFormat;
 import android.os.Build;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
@@ -22,20 +25,13 @@ import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
-import android.widget.LinearLayout;
-import android.widget.TextView;
 import android.widget.Toast;
-
-import androidx.core.app.NotificationCompat;
 
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -46,25 +42,43 @@ public class LogOverlayService extends Service {
     private static final String TAG = "LogOverlayService";
     private static final String CHANNEL_ID = "log_overlay_channel";
     private static final int NOTIFICATION_ID = 2;
-    
+    private static final int BUTTON_SIZE_DP = 44;
+
     private WindowManager windowManager;
     private View overlayView;
-    private View menuView;
     private WindowManager.LayoutParams params;
-    private WindowManager.LayoutParams menuParams;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
-    private boolean isMenuShowing = false;
+    private boolean isOverlayVisible = false;
+
+    private final BroadcastReceiver receiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if ("com.daidai.panel.SHOW_OVERLAY".equals(intent.getAction())) {
+                showOverlay();
+            } else if ("com.daidai.panel.HIDE_OVERLAY".equals(intent.getAction())) {
+                hideOverlay();
+            }
+        }
+    };
 
     @Override
     public void onCreate() {
         super.onCreate();
-        Log.d(TAG, "onCreate");
-        
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         createNotificationChannel();
         startForeground(NOTIFICATION_ID, createNotification());
         createOverlayButton();
+        
+        // 注册广播接收器
+        IntentFilter filter = new IntentFilter();
+        filter.addAction("com.daidai.panel.SHOW_OVERLAY");
+        filter.addAction("com.daidai.panel.HIDE_OVERLAY");
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(receiver, filter);
+        }
     }
 
     @Override
@@ -80,18 +94,12 @@ public class LogOverlayService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
+        try { unregisterReceiver(receiver); } catch (Exception e) { /* ignore */ }
         if (overlayView != null && windowManager != null) {
             try {
                 windowManager.removeView(overlayView);
             } catch (Exception e) {
-                Log.e(TAG, "Error removing overlay", e);
-            }
-        }
-        if (menuView != null && windowManager != null) {
-            try {
-                windowManager.removeView(menuView);
-            } catch (Exception e) {
-                Log.e(TAG, "Error removing menu", e);
+                // ignore
             }
         }
     }
@@ -99,37 +107,28 @@ public class LogOverlayService extends Service {
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
-                CHANNEL_ID,
-                "日志工具",
-                NotificationManager.IMPORTANCE_LOW
-            );
+                CHANNEL_ID, "日志工具", NotificationManager.IMPORTANCE_LOW);
             channel.setDescription("日志导出悬浮按钮");
-            
-            NotificationManager manager = getSystemService(NotificationManager.class);
-            if (manager != null) {
-                manager.createNotificationChannel(channel);
-            }
+            NotificationManager mgr = getSystemService(NotificationManager.class);
+            if (mgr != null) mgr.createNotificationChannel(channel);
         }
     }
 
     private Notification createNotification() {
-        Intent notificationIntent = new Intent(this, MainActivity.class);
-        notificationIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        PendingIntent pendingIntent = PendingIntent.getActivity(
-            this, 0, notificationIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-        );
-
-        return new NotificationCompat.Builder(this, CHANNEL_ID)
+        PendingIntent pi = PendingIntent.getActivity(this, 0,
+            new Intent(this, MainActivity.class).setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        return new androidx.core.app.NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("日志工具运行中")
-            .setContentText("点击悬浮按钮展开菜单")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentIntent(pendingIntent)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setContentIntent(pi)
+            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_LOW)
             .build();
     }
 
     private void createOverlayButton() {
+        int sizePx = (int) (BUTTON_SIZE_DP * getResources().getDisplayMetrics().density);
+
         int layoutType;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             layoutType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
@@ -137,461 +136,143 @@ public class LogOverlayService extends Service {
             layoutType = WindowManager.LayoutParams.TYPE_PHONE;
         }
 
-        int sizePx = (int) (48 * getResources().getDisplayMetrics().density);
-
         params = new WindowManager.LayoutParams(
-            sizePx,
-            sizePx,
-            layoutType,
+            sizePx, sizePx, layoutType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-            PixelFormat.TRANSLUCENT
-        );
-        
+            PixelFormat.TRANSLUCENT);
         params.gravity = Gravity.TOP | Gravity.START;
-        params.x = 16;
-        params.y = 100;
+        params.x = 12;
+        params.y = 120;
 
         overlayView = new View(this) {
-            private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            
             @Override
             protected void onDraw(Canvas canvas) {
                 super.onDraw(canvas);
-                float centerX = getWidth() / 2f;
-                float centerY = getHeight() / 2f;
-                float radius = Math.min(centerX, centerY) - 2;
-                
-                paint.setColor(Color.parseColor("#667eea"));
-                paint.setStyle(Paint.Style.FILL);
-                canvas.drawCircle(centerX, centerY, radius, paint);
-                
-                paint.setColor(Color.WHITE);
-                paint.setTextSize(radius * 1.2f);
-                paint.setTextAlign(Paint.Align.CENTER);
-                Paint.FontMetrics fm = paint.getFontMetrics();
-                float textY = centerY - (fm.ascent + fm.descent) / 2;
-                canvas.drawText("L", centerX, textY, paint);
+                Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+                float cx = getWidth() / 2f, cy = getHeight() / 2f;
+                float r = Math.min(cx, cy) - 2;
+                p.setColor(Color.parseColor("#6366F1"));
+                canvas.drawCircle(cx, cy, r, p);
+                p.setColor(Color.WHITE);
+                p.setTextSize(r * 1.1f);
+                p.setTextAlign(Paint.Align.CENTER);
+                Paint.FontMetrics fm = p.getFontMetrics();
+                canvas.drawText("L", cx, cy - (fm.ascent + fm.descent) / 2, p);
             }
         };
 
         overlayView.setOnTouchListener(new View.OnTouchListener() {
-            private int initialX, initialY;
-            private float initialTouchX, initialTouchY;
-            private boolean isMoved = false;
+            int startX, startY, startTouchX, startTouchY;
+            boolean moved;
 
             @Override
-            public boolean onTouch(View v, MotionEvent event) {
-                switch (event.getAction()) {
+            public boolean onTouch(View v, MotionEvent e) {
+                switch (e.getAction()) {
                     case MotionEvent.ACTION_DOWN:
-                        initialX = params.x;
-                        initialY = params.y;
-                        initialTouchX = event.getRawX();
-                        initialTouchY = event.getRawY();
-                        isMoved = false;
+                        startX = params.x; startY = params.y;
+                        startTouchX = (int) e.getRawX(); startTouchY = (int) e.getRawY();
+                        moved = false;
                         return true;
                     case MotionEvent.ACTION_MOVE:
-                        float dx = event.getRawX() - initialTouchX;
-                        float dy = event.getRawY() - initialTouchY;
-                        if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
-                            isMoved = true;
-                            params.x = initialX + (int) dx;
-                            params.y = initialY + (int) dy;
+                        if (Math.abs(e.getRawX() - startTouchX) > 5 || Math.abs(e.getRawY() - startTouchY) > 5) {
+                            moved = true;
+                            params.x = startX + (int)(e.getRawX() - startTouchX);
+                            params.y = startY + (int)(e.getRawY() - startTouchY);
                             windowManager.updateViewLayout(overlayView, params);
                         }
                         return true;
                     case MotionEvent.ACTION_UP:
-                        if (!isMoved) {
-                            toggleMenu();
-                        }
+                        if (!moved) exportLogs();
                         return true;
                 }
                 return false;
             }
         });
 
-        try {
-            windowManager.addView(overlayView, params);
-            Log.d(TAG, "Overlay created");
-        } catch (Exception e) {
-            Log.e(TAG, "Failed to create overlay", e);
-        }
+        try { windowManager.addView(overlayView, params); isOverlayVisible = true; } catch (Exception e) { Log.e(TAG, "addView failed", e); }
     }
 
-    private void toggleMenu() {
-        if (isMenuShowing) {
-            hideMenu();
-        } else {
-            showMenu();
-        }
-    }
-
-    private void showMenu() {
-        if (menuView != null) {
+    private void showOverlay() {
+        if (overlayView != null && !isOverlayVisible) {
             try {
-                windowManager.removeView(menuView);
+                windowManager.addView(overlayView, params);
+                isOverlayVisible = true;
             } catch (Exception e) {
-                // ignore
+                Log.e(TAG, "showOverlay failed", e);
             }
-        }
-
-        int layoutType;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            layoutType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
-        } else {
-            layoutType = WindowManager.LayoutParams.TYPE_PHONE;
-        }
-
-        int menuWidth = (int) (200 * getResources().getDisplayMetrics().density);
-        
-        menuParams = new WindowManager.LayoutParams(
-            menuWidth,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            layoutType,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-            PixelFormat.TRANSLUCENT
-        );
-        
-        menuParams.gravity = Gravity.TOP | Gravity.START;
-        menuParams.x = params.x + (int) (56 * getResources().getDisplayMetrics().density);
-        menuParams.y = params.y;
-
-        LinearLayout menuLayout = new LinearLayout(this);
-        menuLayout.setOrientation(LinearLayout.VERTICAL);
-        menuLayout.setBackgroundColor(Color.WHITE);
-        menuLayout.setElevation(8 * getResources().getDisplayMetrics().density);
-        
-        addMenuItem(menuLayout, "导出日志", () -> exportLogs());
-        addMenuItem(menuLayout, "安装 Python", () -> installRuntime("python"));
-        addMenuItem(menuLayout, "安装 Node.js", () -> installRuntime("node"));
-        addMenuItem(menuLayout, "关闭菜单", () -> hideMenu());
-
-        menuView = menuLayout;
-
-        try {
-            windowManager.addView(menuView, menuParams);
-            isMenuShowing = true;
-            Log.d(TAG, "Menu shown");
-        } catch (Exception e) {
-            Log.e(TAG, "Failed to show menu", e);
         }
     }
 
-    private void hideMenu() {
-        if (menuView != null) {
+    private void hideOverlay() {
+        if (overlayView != null && isOverlayVisible) {
             try {
-                windowManager.removeView(menuView);
+                windowManager.removeView(overlayView);
+                isOverlayVisible = false;
             } catch (Exception e) {
-                // ignore
+                Log.e(TAG, "hideOverlay failed", e);
             }
-            menuView = null;
         }
-        isMenuShowing = false;
-    }
-
-    private void addMenuItem(LinearLayout parent, String text, Runnable action) {
-        TextView menuItem = new TextView(this);
-        menuItem.setText(text);
-        menuItem.setTextSize(14);
-        menuItem.setTextColor(Color.parseColor("#333333"));
-        int padding = (int) (12 * getResources().getDisplayMetrics().density);
-        menuItem.setPadding(padding, padding, padding, padding);
-        
-        menuItem.setOnTouchListener(new View.OnTouchListener() {
-            @Override
-            public boolean onTouch(View v, MotionEvent event) {
-                switch (event.getAction()) {
-                    case MotionEvent.ACTION_DOWN:
-                        v.setBackgroundColor(Color.parseColor("#E0E0E0"));
-                        return true;
-                    case MotionEvent.ACTION_UP:
-                        v.setBackgroundColor(Color.TRANSPARENT);
-                        action.run();
-                        return true;
-                    case MotionEvent.ACTION_CANCEL:
-                        v.setBackgroundColor(Color.TRANSPARENT);
-                        return true;
-                }
-                return false;
-            }
-        });
-        
-        parent.addView(menuItem);
     }
 
     private void exportLogs() {
-        hideMenu();
         Toast.makeText(this, "正在导出日志...", Toast.LENGTH_SHORT).show();
-        Log.d(TAG, "exportLogs started");
-        
         executor.execute(() -> {
             try {
                 String logs = collectLogs();
-                Log.d(TAG, "Logs collected, length: " + logs.length());
-                
-                String fileName = "daidai-log-" + 
+                String fileName = "daidai-log-" +
                     new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.getDefault()).format(new Date()) + ".txt";
-                
-                File logDir = new File(getFilesDir(), "logs");
-                if (!logDir.exists()) {
-                    logDir.mkdirs();
-                }
-                
-                File logFile = new File(logDir, fileName);
-                FileOutputStream fos = new FileOutputStream(logFile);
+                File dir = new File(Environment.getExternalStoragePublicDirectory(
+                    Environment.DIRECTORY_DOCUMENTS), "DaidaiPanel");
+                if (!dir.exists()) dir.mkdirs();
+                File f = new File(dir, fileName);
+                FileOutputStream fos = new FileOutputStream(f);
                 fos.write(logs.getBytes());
-                fos.flush();
-                fos.close();
-                
-                final String filePath = logFile.getAbsolutePath();
-                Log.d(TAG, "Logs saved to: " + filePath);
-                
+                fos.flush(); fos.close();
+
                 mainHandler.post(() -> {
-                    Toast.makeText(this, "日志已保存到: " + filePath, Toast.LENGTH_LONG).show();
-                    
-                    ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-                    if (clipboard != null) {
-                        ClipData clip = ClipData.newPlainText("daidai-log", logs);
-                        clipboard.setPrimaryClip(clip);
-                        Toast.makeText(this, "已复制到剪贴板", Toast.LENGTH_SHORT).show();
-                    }
+                    Toast.makeText(this, "日志已保存: " + fileName, Toast.LENGTH_LONG).show();
+                    ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                    if (cm != null) { cm.setPrimaryClip(ClipData.newPlainText("log", logs)); }
                 });
-                
             } catch (Exception e) {
-                Log.e(TAG, "Export failed", e);
-                mainHandler.post(() -> {
-                    Toast.makeText(this, "导出失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                });
+                mainHandler.post(() -> Toast.makeText(this, "导出失败: " + e.getMessage(), Toast.LENGTH_LONG).show());
             }
         });
-    }
-
-    private void installRuntime(String name) {
-        hideMenu();
-        String startMsg = "正在安装 " + name + "...";
-        Toast.makeText(this, startMsg, Toast.LENGTH_SHORT).show();
-        appendLog("[安装] " + startMsg);
-        
-        executor.execute(() -> {
-            int maxRetries = 3;
-            int retryCount = 0;
-            Exception lastException = null;
-            
-            while (retryCount < maxRetries) {
-                try {
-                    String token = getAuthToken();
-                    Log.d(TAG, "Auth token: " + (token != null ? "exists" : "null"));
-                    appendLog("[安装] Auth token: " + (token != null ? "存在" : "空"));
-                    
-                    if (token == null) {
-                        String msg = "请先登录面板";
-                        mainHandler.post(() -> {
-                            Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
-                        });
-                        appendLog("[安装] 错误: " + msg);
-                        return;
-                    }
-                    
-                    String url = "http://127.0.0.1:5701/api/v1/android-runtime/install";
-                    String attemptMsg = "第 " + (retryCount + 1) + " 次尝试...";
-                    Log.d(TAG, "Calling install API (attempt " + (retryCount + 1) + "): " + url);
-                    appendLog("[安装] " + attemptMsg);
-                    
-                    HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
-                    conn.setRequestMethod("POST");
-                    conn.setRequestProperty("Content-Type", "application/json");
-                    conn.setRequestProperty("Authorization", "Bearer " + token);
-                    conn.setDoOutput(true);
-                    conn.setConnectTimeout(10000);
-                    conn.setReadTimeout(300000);
-                    
-                    String body = "{\"name\":\"" + name + "\"}";
-                    Log.d(TAG, "Request body: " + body);
-                    conn.getOutputStream().write(body.getBytes());
-                    
-                    int responseCode = conn.getResponseCode();
-                    Log.d(TAG, "Install API response: " + responseCode);
-                    appendLog("[安装] API 响应: " + responseCode);
-                    
-                    if (responseCode == 200) {
-                        BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-                        String line;
-                        while ((line = reader.readLine()) != null) {
-                            Log.d(TAG, "SSE: " + line);
-                            if (line.startsWith("data: ")) {
-                                String msg = line.substring(6);
-                                appendLog("[安装] " + msg);
-                                mainHandler.post(() -> {
-                                    Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
-                                });
-                            }
-                        }
-                        reader.close();
-                        conn.disconnect();
-                        
-                        String successMsg = name + " 安装完成";
-                        appendLog("[安装] " + successMsg);
-                        mainHandler.post(() -> {
-                            Toast.makeText(this, successMsg, Toast.LENGTH_LONG).show();
-                        });
-                        return;
-                    } else {
-                        BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getErrorStream()));
-                        String line;
-                        StringBuilder error = new StringBuilder();
-                        while ((line = reader.readLine()) != null) {
-                            error.append(line);
-                        }
-                        reader.close();
-                        conn.disconnect();
-                        
-                        String errorMsg = error.toString();
-                        Log.e(TAG, "Install failed (attempt " + (retryCount + 1) + "): " + errorMsg);
-                        appendLog("[安装] 失败: " + errorMsg);
-                        
-                        lastException = new Exception(errorMsg);
-                        retryCount++;
-                        
-                        if (retryCount < maxRetries) {
-                            String retryMsg = "下载失败，正在重试... (" + retryCount + "/" + maxRetries + ")";
-                            final int currentRetry = retryCount;
-                            mainHandler.post(() -> {
-                                Toast.makeText(this, retryMsg, Toast.LENGTH_SHORT).show();
-                            });
-                            appendLog("[安装] " + retryMsg);
-                            Thread.sleep(2000);
-                        }
-                    }
-                    
-                } catch (Exception e) {
-                    Log.e(TAG, "Install failed (attempt " + (retryCount + 1) + ")", e);
-                    appendLog("[安装] 异常: " + e.getMessage());
-                    lastException = e;
-                    retryCount++;
-                    
-                    if (retryCount < maxRetries) {
-                        String retryMsg = "下载失败，正在重试... (" + retryCount + "/" + maxRetries + ")";
-                        final int currentRetry = retryCount;
-                        mainHandler.post(() -> {
-                            Toast.makeText(this, retryMsg, Toast.LENGTH_SHORT).show();
-                        });
-                        appendLog("[安装] " + retryMsg);
-                        try {
-                            Thread.sleep(2000);
-                        } catch (InterruptedException ie) {
-                            Thread.currentThread().interrupt();
-                            return;
-                        }
-                    }
-                }
-            }
-            
-            String errorMsg = lastException != null ? lastException.getMessage() : "未知错误";
-            String failMsg = "安装失败: " + errorMsg;
-            Log.e(TAG, "Install failed after " + maxRetries + " attempts: " + errorMsg);
-            appendLog("[安装] " + failMsg);
-            mainHandler.post(() -> {
-                Toast.makeText(this, failMsg, Toast.LENGTH_LONG).show();
-            });
-        });
-    }
-    
-    private void appendLog(String message) {
-        try {
-            String timestamp = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
-            String logLine = "[" + timestamp + "] " + message + "\n";
-            
-            File logDir = new File(getFilesDir(), "logs");
-            if (!logDir.exists()) {
-                logDir.mkdirs();
-            }
-            
-            File logFile = new File(logDir, "install.log");
-            FileOutputStream fos = new FileOutputStream(logFile, true);
-            fos.write(logLine.getBytes());
-            fos.flush();
-            fos.close();
-        } catch (Exception e) {
-            Log.e(TAG, "Failed to append log", e);
-        }
-    }
-
-    private String getAuthToken() {
-        return MainActivity.authToken;
     }
 
     private String collectLogs() {
         StringBuilder sb = new StringBuilder();
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
-        
         sb.append("=== 呆呆面板日志导出 ===\n");
-        sb.append("导出时间: ").append(sdf.format(new Date())).append("\n");
+        sb.append("导出时间: ").append(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date())).append("\n");
         sb.append("设备型号: ").append(Build.MODEL).append("\n");
-        sb.append("系统版本: Android ").append(Build.VERSION.RELEASE).append(" (API ").append(Build.VERSION.SDK_INT).append(")\n");
-        sb.append("应用版本: 0.0.1\n\n");
+        sb.append("系统版本: Android ").append(Build.VERSION.RELEASE).append(" (API ").append(Build.VERSION.SDK_INT).append(")\n\n");
 
-        // 安装日志
-        sb.append("=== 安装日志 ===\n");
-        File installLog = new File(getFilesDir(), "logs/install.log");
-        if (installLog.exists()) {
-            try {
-                BufferedReader reader = new BufferedReader(new InputStreamReader(new java.io.FileInputStream(installLog)));
-                String line;
-                int lineCount = 0;
-                while ((line = reader.readLine()) != null && lineCount < 200) {
-                    sb.append(line).append("\n");
-                    lineCount++;
-                }
-                reader.close();
-            } catch (IOException e) {
-                sb.append("读取失败: ").append(e.getMessage()).append("\n");
-            }
-        } else {
-            sb.append("安装日志不存在\n");
-        }
+        sb.append("=== 应用日志 ===\n");
+        try {
+            Process p = Runtime.getRuntime().exec("logcat -d -s PanelManager:* MainActivity:* PanelService:*");
+            BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream()));
+            String line; int n = 0;
+            while ((line = r.readLine()) != null && n++ < 1000) sb.append(line).append("\n");
+            r.close();
+        } catch (IOException e) { sb.append("读取失败: ").append(e.getMessage()).append("\n"); }
 
-        // 面板日志
         sb.append("\n=== 面板服务日志 ===\n");
-        File panelLog = new File(getFilesDir(), "Dumb-Panel/panel.log");
-        if (panelLog.exists()) {
+        File log = new File(getFilesDir(), "Dumb-Panel/panel.log");
+        if (log.exists()) {
             try {
-                BufferedReader reader = new BufferedReader(new InputStreamReader(new java.io.FileInputStream(panelLog)));
-                String line;
-                int lineCount = 0;
-                while ((line = reader.readLine()) != null && lineCount < 500) {
-                    sb.append(line).append("\n");
-                    lineCount++;
-                }
-                reader.close();
-            } catch (IOException e) {
-                sb.append("读取失败: ").append(e.getMessage()).append("\n");
-            }
-        } else {
-            sb.append("日志文件不存在\n");
-        }
+                BufferedReader r = new BufferedReader(new InputStreamReader(new java.io.FileInputStream(log)));
+                String line; int n = 0;
+                while ((line = r.readLine()) != null && n++ < 500) sb.append(line).append("\n");
+                r.close();
+            } catch (IOException e) { sb.append("读取失败\n"); }
+        } else { sb.append("日志文件不存在\n"); }
 
-        // 文件检查
         sb.append("\n=== 文件检查 ===\n");
-        File webDir = new File(getFilesDir(), "web");
-        File indexFile = new File(webDir, "index.html");
-        
-        sb.append("Web目录: ").append(webDir.exists()).append("\n");
-        sb.append("index.html: ").append(indexFile.exists()).append("\n");
-        
-        File dataDir = new File(getFilesDir(), "Dumb-Panel");
-        sb.append("数据目录: ").append(dataDir.exists()).append("\n");
-        if (dataDir.exists()) {
-            sb.append("config.yaml: ").append(new File(dataDir, "config.yaml").exists()).append("\n");
-            sb.append("daidai.db: ").append(new File(dataDir, "daidai.db").exists()).append("\n");
-        }
-        
-        // 检查 Python 安装目录
-        File pythonBin = new File(getFilesDir(), "Dumb-Panel/deps/bin/python/bin/python3");
-        sb.append("\n=== Python 运行时 ===\n");
-        sb.append("python3 存在: ").append(pythonBin.exists()).append("\n");
-        if (pythonBin.exists()) {
-            sb.append("python3 可执行: ").append(pythonBin.canExecute()).append("\n");
-            sb.append("python3 大小: ").append(pythonBin.length()).append(" bytes\n");
-        }
+        sb.append("Web目录: ").append(new File(getFilesDir(), "web").exists()).append("\n");
+        sb.append("index.html: ").append(new File(getFilesDir(), "web/index.html").exists()).append("\n");
+        File bin = new File(getFilesDir(), "bin/daidai-server");
+        sb.append("二进制文件: ").append(bin.exists()).append("\n");
+        if (bin.exists()) sb.append("大小: ").append(bin.length()).append("\n");
 
         return sb.toString();
     }

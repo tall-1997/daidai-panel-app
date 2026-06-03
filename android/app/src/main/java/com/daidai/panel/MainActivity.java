@@ -446,12 +446,16 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         if (webView != null) webView.onResume();
+        // 显示悬浮窗
+        sendBroadcast(new Intent("com.daidai.panel.SHOW_OVERLAY"));
     }
 
     @Override
     protected void onPause() {
         super.onPause();
         if (webView != null) webView.onPause();
+        // 隐藏悬浮窗
+        sendBroadcast(new Intent("com.daidai.panel.HIDE_OVERLAY"));
     }
 
     @Override
