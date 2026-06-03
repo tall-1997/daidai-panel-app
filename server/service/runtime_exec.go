@@ -311,9 +311,10 @@ func ensureManagedPythonVenv(syncCreate bool) bool {
 		}
 		
 		// 使用 sh -c 方式执行，绕过 Android SELinux 限制
+		// 使用绝对路径 /system/bin/sh，因为 PATH 可能为空
 		shellCmd := pythonPath + " -m venv " + venvDir
-		log.Printf("[ensureManagedPythonVenv] Trying: sh -c '%s'", shellCmd)
-		cmd := exec.Command("sh", "-c", shellCmd)
+		log.Printf("[ensureManagedPythonVenv] Trying: /system/bin/sh -c '%s'", shellCmd)
+		cmd := exec.Command("/system/bin/sh", "-c", shellCmd)
 		out, runErr := cmd.CombinedOutput()
 		if runErr == nil {
 			log.Printf("[ensureManagedPythonVenv] Venv created successfully with %s", pythonPath)
