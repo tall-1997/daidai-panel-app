@@ -47,8 +47,55 @@ func (pm *ProotManager) InitAlpineRootfs(dataDir string) error {
 		return nil
 	}
 
-	log.Printf("[ProotManager] Alpine rootfs not found, need to extract from assets")
-	return fmt.Errorf("alpine rootfs not initialized, please extract from assets first")
+	// 解压 Alpine rootfs
+	log.Printf("[ProotManager] Extracting Alpine rootfs...")
+	os.MkdirAll(pm.rootfsDir, 0755)
+	
+	alpineTarGz := filepath.Join(dataDir, "alpine-rootfs.tar.gz")
+	if _, err := os.Stat(alpineTarGz); os.IsNotExist(err) {
+		// 尝试从 assets 目录复制
+		assetsDir := filepath.Join(filepath.Dir(dataDir), "assets")
+		srcFile := filepath.Join(assetsDir, "alpine", "alpine-rootfs.tar.gz")
+		if _, err := os.Stat(srcFile); err == nil {
+			log.Printf("[ProotManager] Copying from assets: %s", srcFile)
+			if err := prootCopyFile(srcFile, alpineTarGz); err != nil {
+				return fmt.Errorf("failed to copy alpine rootfs: %v", err)
+			}
+		} else {
+			return fmt.Errorf("alpine rootfs not found at: %s or %s", alpineTarGz, srcFile)
+		}
+	}
+
+	// 解压
+	log.Printf("[ProotManager] Extracting %s to %s", alpineTarGz, pm.rootfsDir)
+	cmd := exec.Command("tar", "xzf", alpineTarGz, "-C", pm.rootfsDir)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to extract alpine rootfs: %v, output: %s", err, string(output))
+	}
+
+	// 复制 proot
+	prootSrc := filepath.Join(filepath.Dir(dataDir), "assets", "alpine", "proot")
+	if _, err := os.Stat(prootSrc); err == nil {
+		log.Printf("[ProotManager] Copying proot from: %s", prootSrc)
+		if err := prootCopyFile(prootSrc, pm.prootBin); err != nil {
+			return fmt.Errorf("failed to copy proot: %v", err)
+		}
+		os.Chmod(pm.prootBin, 0755)
+	}
+
+	// 设置 DNS
+	dnsContent := "nameserver 8.8.8.8\nnameserver 8.8.4.4\n"
+	os.WriteFile(filepath.Join(pm.rootfsDir, "etc", "resolv.conf"), []byte(dnsContent), 0644)
+
+	// 验证
+	if _, err := os.Stat(filepath.Join(pm.rootfsDir, "bin", "sh")); err != nil {
+		return fmt.Errorf("alpine rootfs verification failed: %v", err)
+	}
+
+	pm.initialized = true
+	log.Printf("[ProotManager] Alpine rootfs initialized successfully")
+	return nil
 }
 
 // IsInitialized 检查是否已初始化
