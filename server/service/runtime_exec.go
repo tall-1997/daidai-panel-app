@@ -126,6 +126,14 @@ func buildManagedPythonPath(existingPythonPath, workDir, scriptsDir, venvSitePac
 
 func CreateManagedCommand(interpreter, scriptPath string, scriptArgs []string, workDir string, envVars map[string]string) (*exec.Cmd, func(), error) {
 	runtimePaths := currentManagedRuntimePaths()
+	
+	// 检查 Alpine 环境是否可用
+	prootMgr := GetProotManager()
+	if prootMgr.IsInitialized() {
+		// 使用 Alpine + proot 执行脚本
+		log.Printf("[CreateManagedCommand] Using Alpine + proot for %s", interpreter)
+		return createProotCommand(interpreter, scriptPath, scriptArgs, workDir, envVars)
+	}
 
 	switch interpreter {
 	case "python", "python3":
@@ -137,6 +145,46 @@ func CreateManagedCommand(interpreter, scriptPath string, scriptArgs []string, w
 	default:
 		return createStandardManagedCommand(interpreter, scriptPath, scriptArgs, workDir, envVars, runtimePaths)
 	}
+}
+
+// createProotCommand 使用 Alpine + proot 创建命令
+func createProotCommand(interpreter, scriptPath string, scriptArgs []string, workDir string, envVars map[string]string) (*exec.Cmd, func(), error) {
+	prootMgr := GetProotManager()
+	prootBin := prootMgr.prootBin
+	rootfsDir := prootMgr.rootfsDir
+	
+	// 构建 proot 命令
+	args := []string{
+		"-R", rootfsDir,
+		"-w", "/tmp",
+		"-b", "/dev",
+		"-b", "/proc",
+		"-b", "/sys",
+	}
+	
+	// 添加环境变量
+	for k, v := range envVars {
+		args = append(args, "-E", k+"="+v)
+	}
+	
+	// 构建要执行的命令
+	var shellCmd string
+	switch interpreter {
+	case "python", "python3":
+		shellCmd = fmt.Sprintf("cd /tmp && python3 %s %s", scriptPath, strings.Join(scriptArgs, " "))
+	case "node":
+		shellCmd = fmt.Sprintf("cd /tmp && node %s %s", scriptPath, strings.Join(scriptArgs, " "))
+	default:
+		shellCmd = fmt.Sprintf("cd /tmp && %s %s %s", interpreter, scriptPath, strings.Join(scriptArgs, " "))
+	}
+	
+	args = append(args, "/bin/sh", "-c", shellCmd)
+	
+	cmd := exec.Command(prootBin, args...)
+	cmd.Dir = workDir
+	
+	cleanup := func() {}
+	return cmd, cleanup, nil
 }
 
 func currentManagedRuntimePaths() managedRuntimePaths {

@@ -151,8 +151,8 @@ func extractTarGz(src, dst string) error {
 	return cmd.Run()
 }
 
-// copyFile 复制文件
-func copyFile(src, dst string) error {
+// prootCopyFile 复制文件
+func prootCopyFile(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {
 		return err
@@ -165,6 +165,6 @@ func copyFile(src, dst string) error {
 	}
 	defer out.Close()
 
-	_, err = io.Copy(out, out)
+	_, err = io.Copy(out, in)
 	return err
 }

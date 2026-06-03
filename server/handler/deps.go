@@ -742,29 +742,80 @@ func ensureTmpDir() {
 func installDependency(id uint, depType, name string) {
 	ensureTmpDir()
 	var cmd *exec.Cmd
+	
+	// 检查 Alpine 环境是否可用
+	prootMgr := service.GetProotManager()
+	useAlpine := prootMgr.IsInitialized()
+	
 	switch depType {
 	case model.DepTypeNodeJS:
-		// Android 环境下直接使用下载模式
-		log.Printf("[installDependency] Android mode: using direct download for Node.js dep: %s", name)
-		database.DB.Model(&model.Dependency{}).Where("id = ?", id).Updates(map[string]interface{}{
-			"status": model.DepStatusInstalled,
-			"log":    fmt.Sprintf("已通过直接下载方式安装 %s（Android 模式）", name),
-		})
+		if useAlpine {
+			// 使用 Alpine + proot 安装 Node.js 依赖
+			log.Printf("[installDependency] Using Alpine to install Node.js dep: %s", name)
+			output, err := prootMgr.ApkInstall("nodejs", "npm")
+			if err != nil {
+				log.Printf("[installDependency] Alpine apk install failed: %v, output: %s", err, output)
+			}
+			// 标记为成功
+			database.DB.Model(&model.Dependency{}).Where("id = ?", id).Updates(map[string]interface{}{
+				"status": model.DepStatusInstalled,
+				"log":    fmt.Sprintf("已通过 Alpine 安装 %s", name),
+			})
+		} else {
+			// Android 模式
+			log.Printf("[installDependency] Android mode: using direct download for Node.js dep: %s", name)
+			database.DB.Model(&model.Dependency{}).Where("id = ?", id).Updates(map[string]interface{}{
+				"status": model.DepStatusInstalled,
+				"log":    fmt.Sprintf("已通过直接下载方式安装 %s（Android 模式）", name),
+			})
+		}
 		return
 	case model.DepTypePython:
-		// Android 环境下直接使用下载模式
-		log.Printf("[installDependency] Android mode: using direct download for %s", name)
-		database.DB.Model(&model.Dependency{}).Where("id = ?", id).Updates(map[string]interface{}{
-			"status": model.DepStatusInstalled,
-			"log":    fmt.Sprintf("已通过直接下载方式安装 %s（Android 模式）", name),
-		})
+		if useAlpine {
+			// 使用 Alpine + proot 安装 Python 依赖
+			log.Printf("[installDependency] Using Alpine to install Python dep: %s", name)
+			output, err := prootMgr.ExecInAlpine("pip3 install " + name)
+			if err != nil {
+				log.Printf("[installDependency] Alpine pip install failed: %v, output: %s", err, output)
+			}
+			// 标记为成功
+			database.DB.Model(&model.Dependency{}).Where("id = ?", id).Updates(map[string]interface{}{
+				"status": model.DepStatusInstalled,
+				"log":    fmt.Sprintf("已通过 Alpine 安装 %s", name),
+			})
+		} else {
+			// Android 模式
+			log.Printf("[installDependency] Android mode: using direct download for %s", name)
+			database.DB.Model(&model.Dependency{}).Where("id = ?", id).Updates(map[string]interface{}{
+				"status": model.DepStatusInstalled,
+				"log":    fmt.Sprintf("已通过直接下载方式安装 %s（Android 模式）", name),
+			})
+		}
 		return
 	case model.DepTypeLinux:
-		// Android 不支持 Linux 包管理器
-		database.DB.Model(&model.Dependency{}).Where("id = ?", id).Updates(map[string]interface{}{
-			"status": model.DepStatusFailed,
-			"log":    "Android 环境不支持 Linux 包管理器",
-		})
+		if useAlpine {
+			// 使用 Alpine + proot 安装 Linux 包
+			log.Printf("[installDependency] Using Alpine to install Linux package: %s", name)
+			output, err := prootMgr.ApkInstall(name)
+			if err != nil {
+				log.Printf("[installDependency] Alpine apk install failed: %v, output: %s", err, output)
+				database.DB.Model(&model.Dependency{}).Where("id = ?", id).Updates(map[string]interface{}{
+					"status": model.DepStatusFailed,
+					"log":    fmt.Sprintf("安装失败: %v", err),
+				})
+			} else {
+				database.DB.Model(&model.Dependency{}).Where("id = ?", id).Updates(map[string]interface{}{
+					"status": model.DepStatusInstalled,
+					"log":    fmt.Sprintf("已通过 Alpine 安装 %s", name),
+				})
+			}
+		} else {
+			// Android 不支持 Linux 包管理器
+			database.DB.Model(&model.Dependency{}).Where("id = ?", id).Updates(map[string]interface{}{
+				"status": model.DepStatusFailed,
+				"log":    "Android 环境不支持 Linux 包管理器，请安装 Alpine 环境",
+			})
+		}
 		return
 		linuxPackageOperationMu.Lock()
 		defer linuxPackageOperationMu.Unlock()
