@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -749,19 +750,35 @@ func installDependency(id uint, depType, name string) {
 	case model.DepTypePython:
 		pipBin, extraFlags, usingSystemPip := service.ResolvePipInstallCommand()
 		
-		// 检查 pip 是否可用
-		if pipBin == "" || (usingSystemPip && pipBin == "pip3") {
-			// 检查 Android 运行时是否已安装
-			androidPythonBin := filepath.Join(depsDir, "bin", "python", "bin", "python3")
-			if _, err := os.Stat(androidPythonBin); os.IsNotExist(err) {
-				database.DB.Model(&model.Dependency{}).Where("id = ?", id).Updates(map[string]interface{}{
-					"status": model.DepStatusFailed,
-					"log":    "Python 运行时未安装。请先点击悬浮窗（左上角蓝色按钮）-> 安装 Python",
-				})
-				return
+		// 如果 ResolvePipInstallCommand 返回的是系统 pip，尝试使用绝对路径
+		if usingSystemPip || pipBin == "pip3" {
+			// 尝试使用绝对路径
+			absPipPaths := []string{
+				filepath.Join(depsDir, "bin", "python", "bin", "pip3.12"),
+				filepath.Join(depsDir, "bin", "python", "bin", "pip3"),
+				filepath.Join(depsDir, "bin", "python", "bin", "pip"),
+			}
+			for _, absPip := range absPipPaths {
+				if _, err := os.Stat(absPip); err == nil {
+					pipBin = absPip
+					extraFlags = nil
+					usingSystemPip = false
+					log.Printf("[installDependency] Using absolute pip path: %s", pipBin)
+					break
+				}
 			}
 		}
 		
+		// 如果仍然没有找到 pip，报错
+		if usingSystemPip || pipBin == "pip3" {
+			database.DB.Model(&model.Dependency{}).Where("id = ?", id).Updates(map[string]interface{}{
+				"status": model.DepStatusFailed,
+				"log":    "Python 运行时未安装。请先点击悬浮窗（左上角蓝色按钮）-> 安装 Python",
+			})
+			return
+		}
+		
+		log.Printf("[installDependency] Installing Python dep: %s using %s", name, pipBin)
 		cmd = exec.Command(pipBin, service.BuildPipInstallArgs(extraFlags, name)...)
 		cmd.Env = append(service.PipInstallEnv(service.AppendProxyEnv(os.Environ()), service.CurrentPipMirror()), "TMPDIR=/tmp")
 	case model.DepTypeLinux:
