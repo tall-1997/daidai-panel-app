@@ -154,7 +154,16 @@ func currentManagedRuntimePaths() managedRuntimePaths {
 	androidPythonBin := filepath.Join(androidBinDir, "python", "bin")
 	androidNodeBin := filepath.Join(androidBinDir, "node", "bin")
 	
-	sanitizedPath := sanitizeManagedPath(os.Getenv("PATH"), nodeBin, venvBin, androidBinDir, androidPythonBin, androidNodeBin)
+	// 清理 PATH 中的旧路径
+	sanitizedPath := sanitizeManagedPath(os.Getenv("PATH"), nodeBin, venvBin)
+	
+	// 将 Android 运行时路径添加到 PATH 开头
+	androidPaths := []string{androidPythonBin, androidNodeBin, androidBinDir}
+	for _, p := range androidPaths {
+		if _, err := os.Stat(p); err == nil {
+			sanitizedPath = p + string(os.PathListSeparator) + sanitizedPath
+		}
+	}
 
 	return managedRuntimePaths{
 		NodeBin:          nodeBin,
@@ -737,15 +746,9 @@ func combineCleanup(cleanups ...func()) func() {
 	}
 }
 
-func sanitizeManagedPath(currentPath string, extraBins ...string) string {
-	// 收集所有需要排除的路径
-	cleanBins := make([]string, 0, len(extraBins))
-	for _, bin := range extraBins {
-		cleaned := filepath.Clean(strings.TrimSpace(bin))
-		if cleaned != "" && cleaned != "." {
-			cleanBins = append(cleanBins, cleaned)
-		}
-	}
+func sanitizeManagedPath(currentPath, nodeBin, venvBin string) string {
+	cleanNodeBin := filepath.Clean(strings.TrimSpace(nodeBin))
+	cleanVenvBin := filepath.Clean(strings.TrimSpace(venvBin))
 
 	segments := make([]string, 0)
 	seen := make(map[string]struct{})
@@ -754,15 +757,7 @@ func sanitizeManagedPath(currentPath string, extraBins ...string) string {
 		if cleanItem == "" || cleanItem == "." {
 			continue
 		}
-		// 检查是否是需要排除的路径
-		skip := false
-		for _, bin := range cleanBins {
-			if cleanItem == bin {
-				skip = true
-				break
-			}
-		}
-		if skip {
+		if cleanItem == cleanNodeBin || cleanItem == cleanVenvBin {
 			continue
 		}
 		if _, exists := seen[cleanItem]; exists {
