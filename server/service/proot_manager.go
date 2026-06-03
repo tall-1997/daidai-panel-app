@@ -91,10 +91,12 @@ func (pm *ProotManager) ExecInAlpine(command string) (string, error) {
 		return "", fmt.Errorf("Alpine rootfs not initialized")
 	}
 
+	// proot 是动态链接的，需要设置 LD_LIBRARY_PATH 指向 libtalloc.so 所在目录
+	prootDir := filepath.Dir(pm.prootBin)
+	
 	// 使用 sh -c 包装 proot 命令，绕过 Android SELinux 限制
-	// 先检查 proot 是否可执行
-	prootCmd := fmt.Sprintf("if [ -x '%s' ]; then %s -R %s -w /root -b /dev -b /proc -b /sys /bin/sh -c '%s'; else echo 'proot not executable' >&2; exit 1; fi",
-		pm.prootBin, pm.prootBin, pm.rootfsDir, command)
+	prootCmd := fmt.Sprintf("LD_LIBRARY_PATH='%s' exec '%s' -R '%s' -w /root -b /dev -b /proc -b /sys /bin/sh -c '%s'",
+		prootDir, pm.prootBin, pm.rootfsDir, command)
 
 	cmd := exec.Command("/system/bin/sh", "-c", prootCmd)
 	output, err := cmd.CombinedOutput()
@@ -107,15 +109,18 @@ func (pm *ProotManager) ExecInAlpineWithEnv(command string, env map[string]strin
 		return "", fmt.Errorf("Alpine rootfs not initialized")
 	}
 
+	// proot 是动态链接的，需要设置 LD_LIBRARY_PATH 指向 libtalloc.so 所在目录
+	prootDir := filepath.Dir(pm.prootBin)
+
 	// 构建环境变量参数
 	envArgs := ""
 	for k, v := range env {
-		envArgs += fmt.Sprintf(" -E %s=%s", k, v)
+		envArgs += fmt.Sprintf("export %s='%s'; ", k, v)
 	}
 
 	// 使用 sh -c 包装 proot 命令，绕过 Android SELinux 限制
-	prootCmd := fmt.Sprintf("if [ -x '%s' ]; then %s -R %s -w /root -b /dev -b /proc -b /sys%s /bin/sh -c '%s'; else echo 'proot not executable' >&2; exit 1; fi",
-		pm.prootBin, pm.prootBin, pm.rootfsDir, envArgs, command)
+	prootCmd := fmt.Sprintf("LD_LIBRARY_PATH='%s' %s exec '%s' -R '%s' -w /root -b /dev -b /proc -b /sys /bin/sh -c '%s'",
+		prootDir, envArgs, pm.prootBin, pm.rootfsDir, command)
 
 	cmd := exec.Command("/system/bin/sh", "-c", prootCmd)
 	output, err := cmd.CombinedOutput()

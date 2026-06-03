@@ -152,9 +152,10 @@ func createProotCommand(interpreter, scriptPath string, scriptArgs []string, wor
 	prootMgr := GetProotManager()
 	prootBin := prootMgr.prootBin
 	rootfsDir := prootMgr.rootfsDir
+	prootDir := filepath.Dir(prootBin)
 	
-	// 构建 proot 命令
-	args := []string{
+	// 构建 proot 参数
+	prootArgs := []string{
 		"-R", rootfsDir,
 		"-w", "/tmp",
 		"-b", "/dev",
@@ -164,7 +165,7 @@ func createProotCommand(interpreter, scriptPath string, scriptArgs []string, wor
 	
 	// 添加环境变量
 	for k, v := range envVars {
-		args = append(args, "-E", k+"="+v)
+		prootArgs = append(prootArgs, "-E", k+"="+v)
 	}
 	
 	// 构建要执行的命令
@@ -178,11 +179,11 @@ func createProotCommand(interpreter, scriptPath string, scriptArgs []string, wor
 		shellCmd = fmt.Sprintf("cd /tmp && %s %s %s", interpreter, scriptPath, strings.Join(scriptArgs, " "))
 	}
 	
-	args = append(args, "/bin/sh", "-c", shellCmd)
+	prootArgs = append(prootArgs, "/bin/sh", "-c", shellCmd)
 	
-	// 使用 sh -c 包装 proot 命令，绕过 Android SELinux 限制
-	argsStr := strings.Join(args, " ")
-	prootCmd := fmt.Sprintf("exec '%s' %s", prootBin, argsStr)
+	// 使用 sh -c 包装 proot 命令，设置 LD_LIBRARY_PATH
+	argsStr := strings.Join(prootArgs, " ")
+	prootCmd := fmt.Sprintf("LD_LIBRARY_PATH='%s' exec '%s' %s", prootDir, prootBin, argsStr)
 	
 	cmd := exec.Command("/system/bin/sh", "-c", prootCmd)
 	cmd.Dir = workDir

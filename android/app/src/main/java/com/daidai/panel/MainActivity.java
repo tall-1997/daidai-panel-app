@@ -75,14 +75,17 @@ public class MainActivity extends AppCompatActivity {
                 
                 // 检查 Alpine 是否已初始化（由 SplashActivity 完成）
                 File alpineBin = new File(dataDir, "alpine/bin/sh");
-                File proot = new File(dataDir, "proot");
+                
+                // proot 在 nativeLibraryDir 中
+                String nativeLibDir = getApplicationInfo().nativeLibraryDir;
+                File proot = new File(nativeLibDir, "libproot.so");
                 
                 if (alpineBin.exists() && proot.exists()) {
                     Log.d(TAG, "Alpine environment already initialized by SplashActivity");
                     // 通知 Go 代码
                     PanelManager.getInstance(this).setAlpineReady(dataDir, proot.getAbsolutePath());
                 } else {
-                    Log.w(TAG, "Alpine environment not initialized");
+                    Log.w(TAG, "Alpine environment not initialized, alpine: " + alpineBin.exists() + ", proot: " + proot.exists());
                 }
                 
             } catch (Exception e) {

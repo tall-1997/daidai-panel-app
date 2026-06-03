@@ -141,33 +141,6 @@ public class SplashActivity extends AppCompatActivity {
                 Log.d(TAG, "Alpine rootfs already exists");
             }
             
-            // 复制 proot（从 assets 复制到 dataDir）
-            File prootDst = new File(dataDir, "proot");
-            if (!prootDst.exists()) {
-                Log.d(TAG, "Copying proot from assets...");
-                InputStream in = getAssets().open("alpine/proot");
-                FileOutputStream fos = new FileOutputStream(prootDst);
-                byte[] buffer = new byte[4096];
-                int read;
-                while ((read = in.read(buffer)) != -1) {
-                    fos.write(buffer, 0, read);
-                }
-                fos.flush();
-                fos.close();
-                in.close();
-                
-                // 设置可执行权限
-                prootDst.setExecutable(true, false);
-                prootDst.setReadable(true, false);
-                
-                Log.d(TAG, "Proot copied to: " + prootDst.getAbsolutePath());
-                Log.d(TAG, "Proot can execute: " + prootDst.canExecute());
-            } else {
-                Log.d(TAG, "Proot already exists");
-                // 确保权限正确
-                prootDst.setExecutable(true, false);
-            }
-            
             // 设置 DNS
             File resolvConf = new File(alpineDir, "etc/resolv.conf");
             if (!resolvConf.exists()) {
@@ -180,8 +153,9 @@ public class SplashActivity extends AppCompatActivity {
             Log.d(TAG, "Alpine environment initialized");
             
             // 通知 Go 代码 Alpine 环境已就绪
-            // proot 在 dataDir/proot 中
-            String prootPath = new File(dataDir, "proot").getAbsolutePath();
+            // proot 在 nativeLibraryDir 中，有执行权限
+            String nativeLibDir = getApplicationInfo().nativeLibraryDir;
+            String prootPath = new File(nativeLibDir, "libproot.so").getAbsolutePath();
             Log.d(TAG, "Notifying Go that Alpine is ready, proot: " + prootPath);
             PanelManager.getInstance(this).setAlpineReady(dataDir, prootPath);
             
