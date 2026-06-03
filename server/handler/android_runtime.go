@@ -15,26 +15,28 @@ import (
 	"sync"
 	"time"
 
+	"daidai-panel/config"
 	"daidai-panel/middleware"
 	"daidai-panel/pkg/response"
 
 	"github.com/gin-gonic/gin"
 )
 
-// AndroidRuntimeHandler 提供在 Magisk 环境里一键安装 Python / Node.js 等脚本运行时的能力。
-//
-// 背景：Docker 镜像里 apk / apt 装好了 python、nodejs，但在 Android 上没有这些。模块默认
-// 只打包面板本体，解释器需要用户另外提供。这个 handler 让用户可以：
-//   - 在面板里看到当前 Android 运行时的 bin 目录有没有 python/node；
-//   - 一键触发下载 + 解压（若用户已装 Termux 则优先使用 Termux 的 pkg）。
-//
-// 只在检测到当前是 Android 环境时才暴露给前端。
+// AndroidRuntimeHandler 提供在 Android 环境里一键安装 Python / Node.js 等脚本运行时的能力。
 type AndroidRuntimeHandler struct{}
 
 func NewAndroidRuntimeHandler() *AndroidRuntimeHandler { return &AndroidRuntimeHandler{} }
 
-// bin 目录约定：Magisk service.sh 会把这里加入 PATH / LD_LIBRARY_PATH。
-const androidBinDir = "/data/adb/daidai-panel/bin"
+// getAndroidBinDir 获取 Android 运行时 bin 目录
+// 优先使用配置中的数据目录下的 deps/bin，否则使用 Magisk 模块目录
+func getAndroidBinDir() string {
+	// 如果有配置，使用数据目录下的 deps/bin
+	if config.C != nil && strings.TrimSpace(config.C.Data.Dir) != "" {
+		return filepath.Join(config.C.Data.Dir, "deps", "bin")
+	}
+	// 否则使用 Magisk 模块目录
+	return "/data/adb/daidai-panel/bin"
+}
 
 // androidRuntimePreset 定义了面板预置的运行时下载源。
 type androidRuntimePreset struct {
@@ -48,11 +50,7 @@ type androidRuntimePreset struct {
 	Note            string `json:"note"`              // 备注
 }
 
-// 预置下载源 —— 会跟随后续 Release 更新，用户也可以通过 `/install` 接口传入自定义 URL。
-// 这里选择的是社区常用的静态/可移植构建：
-//   - Python: python-build-standalone (indygreg) aarch64-unknown-linux-gnu / x86_64-unknown-linux-gnu
-//   - Node.js: 官方 nodejs.org linux-arm64 / linux-x64 包
-// 由于 Android 是 bionic libc，这些预构建并不总是能跑，因此同时保留 Termux 一键方案。
+// 预置下载源
 var androidRuntimePresets = []androidRuntimePreset{
 	{
 		Name:            "python",
@@ -105,12 +103,11 @@ type androidRuntimeStatus struct {
 type androidRuntimeItem struct {
 	Name      string `json:"name"`
 	Installed bool   `json:"installed"`
-	Path      string `json:"path"`
-	Version   string `json:"version"`
+	Path      string `json:"path,omitempty"`
+	Version   string `json:"version,omitempty"`
 }
 
-// androidSupported 判断当前进程是不是跑在 Android 上（面具版）。
-// 判定方式：runtime.GOOS == "android" 或存在 /data/adb/modules/daidai-panel 目录。
+// androidSupported 判断当前进程是不是跑在 Android 上。
 func androidSupported() bool {
 	if runtime.GOOS == "android" {
 		return true
@@ -146,6 +143,7 @@ func termuxDetected() bool {
 // probeRuntime 在 androidBinDir + Termux PATH 下查找指定命令。
 func probeRuntime(cmdName string) androidRuntimeItem {
 	item := androidRuntimeItem{Name: cmdName}
+	androidBinDir := getAndroidBinDir()
 
 	candidates := []string{
 		filepath.Join(androidBinDir, cmdName, "bin", cmdName),
@@ -183,6 +181,8 @@ func probeRuntime(cmdName string) androidRuntimeItem {
 }
 
 func (h *AndroidRuntimeHandler) Status(c *gin.Context) {
+	androidBinDir := getAndroidBinDir()
+	
 	if !androidSupported() {
 		response.Success(c, androidRuntimeStatus{
 			Supported: false,
@@ -198,7 +198,6 @@ func (h *AndroidRuntimeHandler) Status(c *gin.Context) {
 		probeRuntime("node"),
 	}
 
-	// 过滤出和当前 arch 匹配的预置
 	var presets []androidRuntimePreset
 	for _, p := range androidRuntimePresets {
 		if p.Arch == arch {
@@ -224,8 +223,10 @@ type androidInstallRequest struct {
 
 // Install 以 SSE 形式流式返回下载/解压进度。
 func (h *AndroidRuntimeHandler) Install(c *gin.Context) {
+	androidBinDir := getAndroidBinDir()
+	
 	if !androidSupported() {
-		response.Error(c, http.StatusForbidden, "仅 Android 面具版支持该操作")
+		response.Error(c, http.StatusForbidden, "仅 Android 环境支持该操作")
 		return
 	}
 
@@ -314,89 +315,55 @@ func (h *AndroidRuntimeHandler) Install(c *gin.Context) {
 	defer gzr.Close()
 
 	tr := tar.NewReader(gzr)
-	var extractedFiles int64
-	lastReport := time.Now()
-
+	fileCount := 0
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			emit("❌ 解析 tar 失败: " + err.Error())
+			emit("❌ 读取 tar 失败: " + err.Error())
 			return
 		}
 
-		// 去掉前 N 层目录
+		// strip components
 		name := hdr.Name
-		if req.StripComponents > 0 {
-			parts := strings.SplitN(name, "/", req.StripComponents+1)
-			if len(parts) <= req.StripComponents {
-				continue
+		for i := 0; i < req.StripComponents; i++ {
+			if idx := strings.Index(name, "/"); idx >= 0 {
+				name = name[idx+1:]
 			}
-			name = parts[len(parts)-1]
 		}
 		if name == "" {
 			continue
 		}
 
-		outPath := filepath.Join(targetDir, name)
-		// 防止 tar slip
-		if !strings.HasPrefix(outPath, targetDir+string(os.PathSeparator)) && outPath != targetDir {
-			emit("⚠ 跳过越界路径: " + hdr.Name)
-			continue
-		}
+		target := filepath.Join(targetDir, name)
 
 		switch hdr.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(outPath, os.FileMode(hdr.Mode)&0o777|0o755); err != nil {
-				emit("❌ 创建目录失败: " + err.Error())
-				return
-			}
-		case tar.TypeReg, tar.TypeRegA:
-			if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
-				emit("❌ 创建父目录失败: " + err.Error())
-				return
-			}
-			f, err := os.OpenFile(outPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(hdr.Mode)&0o777)
+			os.MkdirAll(target, 0o755)
+		case tar.TypeReg:
+			os.MkdirAll(filepath.Dir(target), 0o755)
+			f, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY, os.FileMode(hdr.Mode))
 			if err != nil {
-				emit("❌ 写入文件失败: " + err.Error())
+				emit("❌ 创建文件失败: " + err.Error())
 				return
 			}
 			if _, err := io.Copy(f, tr); err != nil {
 				f.Close()
-				emit("❌ 复制内容失败: " + err.Error())
+				emit("❌ 写入文件失败: " + err.Error())
 				return
 			}
 			f.Close()
-		case tar.TypeSymlink:
-			_ = os.Remove(outPath)
-			if err := os.Symlink(hdr.Linkname, outPath); err != nil {
-				emit("⚠ 创建软链失败(" + outPath + "): " + err.Error())
+			fileCount++
+			if fileCount%100 == 0 {
+				emit(fmt.Sprintf("已解压 %d 个文件...", fileCount))
 			}
 		}
-
-		extractedFiles++
-		if time.Since(lastReport) > 500*time.Millisecond {
-			emit(fmt.Sprintf("解压中... 已处理 %d 个条目", extractedFiles))
-			lastReport = time.Now()
-		}
 	}
 
-	emit(fmt.Sprintf("✅ 解压完成，共 %d 个条目", extractedFiles))
-
-	// 尝试验证
-	probe := probeRuntime(req.Name)
-	if probe.Installed {
-		emit("✅ 检测到可执行: " + probe.Path)
-		if probe.Version != "" {
-			emit("版本: " + probe.Version)
-		}
-	} else {
-		emit("⚠ 解压成功但未检测到可执行文件，可能架构不兼容，请查看 " + targetDir)
-	}
-
-	emit("完成。请在「任务」页面选择 Python/Node 运行时测试脚本执行。")
+	emit(fmt.Sprintf("✅ 安装完成，共解压 %d 个文件", fileCount))
+	emit(fmt.Sprintf("安装位置: %s/%s", androidBinDir, req.Name))
 }
 
 type androidUninstallRequest struct {
@@ -404,42 +371,49 @@ type androidUninstallRequest struct {
 }
 
 func (h *AndroidRuntimeHandler) Uninstall(c *gin.Context) {
+	androidBinDir := getAndroidBinDir()
+	
 	if !androidSupported() {
-		response.Error(c, http.StatusForbidden, "仅 Android 面具版支持该操作")
+		response.Error(c, http.StatusForbidden, "仅 Android 环境支持该操作")
 		return
 	}
+
 	var req androidUninstallRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, http.StatusBadRequest, "参数错误: "+err.Error())
 		return
 	}
-	if req.Name != "python" && req.Name != "node" {
-		response.Error(c, http.StatusBadRequest, "name 只能是 python 或 node")
-		return
-	}
+
 	target := filepath.Join(androidBinDir, req.Name)
-	if err := os.RemoveAll(target); err != nil {
-		response.Error(c, http.StatusInternalServerError, "删除失败: "+err.Error())
+	if _, err := os.Stat(target); os.IsNotExist(err) {
+		response.Error(c, http.StatusNotFound, "未找到该运行时")
 		return
 	}
-	response.Success(c, gin.H{"removed": target})
+
+	if err := os.RemoveAll(target); err != nil {
+		response.Error(c, http.StatusInternalServerError, "卸载失败: "+err.Error())
+		return
+	}
+
+	response.Success(c, gin.H{"message": "已卸载 " + req.Name})
 }
 
-// 互斥锁，避免同时触发多次下载
 var androidInstallMu sync.Mutex
 
-func (h *AndroidRuntimeHandler) InstallGuarded(c *gin.Context) {
+func (h *AndroidRuntimeHandler) Lock() bool {
 	if !androidInstallMu.TryLock() {
-		response.Error(c, http.StatusConflict, "已有安装任务在进行中，请等待完成")
-		return
+		return false
 	}
-	defer androidInstallMu.Unlock()
-	h.Install(c)
+	return true
+}
+
+func (h *AndroidRuntimeHandler) Unlock() {
+	androidInstallMu.Unlock()
 }
 
 func (h *AndroidRuntimeHandler) RegisterRoutes(r *gin.RouterGroup) {
-	grp := r.Group("/android-runtime", middleware.JWTAuth(), middleware.RequireAdmin())
-	grp.GET("/status", h.Status)
-	grp.POST("/install", h.InstallGuarded)
-	grp.POST("/uninstall", h.Uninstall)
+	g := r.Group("/android-runtime", middleware.JWTAuth(), middleware.RequireAdmin())
+	g.GET("/status", h.Status)
+	g.POST("/install", h.Install)
+	g.POST("/uninstall", h.Uninstall)
 }
