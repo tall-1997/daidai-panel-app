@@ -73,6 +73,16 @@ func (s *MobileServer) Start(dataDir, webDir string, port int) error {
 		port = 5701
 	}
 
+	// 注入 PATH 环境变量（关键！解决 Android 进程 PATH 为空的问题）
+	depsDir := filepath.Join(dataDir, "deps")
+	pythonBinDir := filepath.Join(depsDir, "bin", "python", "bin")
+	nodeBinDir := filepath.Join(depsDir, "bin", "node", "bin")
+	
+	currentPath := os.Getenv("PATH")
+	newPath := pythonBinDir + ":" + nodeBinDir + ":" + filepath.Join(depsDir, "bin") + ":" + currentPath
+	os.Setenv("PATH", newPath)
+	log.Printf("[Mobile] PATH injected: %s", newPath)
+
 	// Ensure directories exist
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		return fmt.Errorf("failed to create data directory: %v", err)
