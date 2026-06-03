@@ -117,12 +117,12 @@ func (p *DaidaiPanel) GetVersion() string {
 }
 
 // SetAlpineReady marks the Alpine environment as ready
-func (p *DaidaiPanel) SetAlpineReady(dataDir string) string {
-	log.Printf("[DaidaiPanel] SetAlpineReady called with dataDir: %s", dataDir)
+func (p *DaidaiPanel) SetAlpineReady(dataDir string, prootBin string) string {
+	log.Printf("[DaidaiPanel] SetAlpineReady called with dataDir: %s, prootBin: %s", dataDir, prootBin)
 	
 	// 设置 ProotManager 为已初始化
 	prootMgr := service.GetProotManager()
-	prootMgr.SetInitialized(dataDir)
+	prootMgr.SetInitialized(dataDir, prootBin)
 	
 	return `{"success":true}`
 }

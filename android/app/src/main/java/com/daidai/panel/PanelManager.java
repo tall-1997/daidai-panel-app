@@ -176,9 +176,9 @@ public class PanelManager {
     /**
      * 通知 Alpine 环境已就绪
      */
-    public void setAlpineReady(String dataDir) {
+    public void setAlpineReady(String dataDir, String prootBin) {
         try {
-            String result = panel.setAlpineReady(dataDir);
+            String result = panel.setAlpineReady(dataDir, prootBin);
             Log.d(TAG, "setAlpineReady result: " + result);
         } catch (Exception e) {
             Log.e(TAG, "setAlpineReady failed", e);

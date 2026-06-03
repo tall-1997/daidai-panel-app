@@ -52,16 +52,27 @@ func (pm *ProotManager) InitAlpineRootfs(dataDir string) error {
 	return fmt.Errorf("alpine rootfs not initialized yet")
 }
 
+// GetProotBin 获取 proot 二进制路径
+func (pm *ProotManager) GetProotBin() string {
+	return pm.prootBin
+}
+
+// SetProotBin 设置 proot 二进制路径
+func (pm *ProotManager) SetProotBin(path string) {
+	pm.prootBin = path
+	log.Printf("[ProotManager] Proot bin path set to: %s", path)
+}
+
 // SetInitialized 标记为已初始化（由 Java 代码调用）
-func (pm *ProotManager) SetInitialized(dataDir string) {
+func (pm *ProotManager) SetInitialized(dataDir string, prootBin string) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 	
 	pm.dataDir = dataDir
 	pm.rootfsDir = filepath.Join(dataDir, "alpine")
-	pm.prootBin = filepath.Join(dataDir, "proot")
+	pm.prootBin = prootBin
 	pm.initialized = true
-	log.Printf("[ProotManager] Alpine rootfs initialized by Java: %s", pm.rootfsDir)
+	log.Printf("[ProotManager] Alpine rootfs initialized by Java: %s, proot: %s", pm.rootfsDir, pm.prootBin)
 }
 
 // IsInitialized 检查是否已初始化

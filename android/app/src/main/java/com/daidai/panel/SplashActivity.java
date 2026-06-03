@@ -188,8 +188,11 @@ public class SplashActivity extends AppCompatActivity {
             Log.d(TAG, "Alpine environment initialized");
             
             // 通知 Go 代码 Alpine 环境已就绪
-            Log.d(TAG, "Notifying Go that Alpine is ready...");
-            PanelManager.getInstance(this).setAlpineReady(dataDir);
+            // proot 在 nativeLibraryDir 中，有执行权限
+            String nativeLibDir = getApplicationInfo().nativeLibraryDir;
+            String prootPath = nativeLibDir + "/libproot.so";
+            Log.d(TAG, "Notifying Go that Alpine is ready, proot: " + prootPath);
+            PanelManager.getInstance(this).setAlpineReady(dataDir, prootPath);
             
         } catch (Exception e) {
             Log.e(TAG, "Failed to init Alpine environment", e);
