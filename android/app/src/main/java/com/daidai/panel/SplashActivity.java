@@ -91,18 +91,44 @@ public class SplashActivity extends AppCompatActivity {
         String dataDir = getFilesDir().getAbsolutePath() + "/Dumb-Panel";
         String pythonBin = dataDir + "/deps/bin/python/bin/python3";
         File file = new File(pythonBin);
-        boolean exists = file.exists() && file.canExecute();
-        Log.d(TAG, "Python installed: " + exists + " (" + pythonBin + ")");
-        return exists;
+        boolean exists = file.exists();
+        boolean canExecute = exists && file.canExecute();
+        Log.d(TAG, "Python check: exists=" + exists + ", canExecute=" + canExecute + " (" + pythonBin + ")");
+        
+        // 列出目录内容
+        File binDir = new File(dataDir + "/deps/bin/python/bin");
+        if (binDir.exists()) {
+            String[] files = binDir.list();
+            if (files != null) {
+                Log.d(TAG, "Python bin dir contents: " + String.join(", ", files));
+            }
+        } else {
+            Log.d(TAG, "Python bin dir not exists: " + binDir.getAbsolutePath());
+        }
+        
+        return canExecute;
     }
 
     private boolean checkNodeInstalled() {
         String dataDir = getFilesDir().getAbsolutePath() + "/Dumb-Panel";
         String nodeBin = dataDir + "/deps/bin/node/bin/node";
         File file = new File(nodeBin);
-        boolean exists = file.exists() && file.canExecute();
-        Log.d(TAG, "Node installed: " + exists + " (" + nodeBin + ")");
-        return exists;
+        boolean exists = file.exists();
+        boolean canExecute = exists && file.canExecute();
+        Log.d(TAG, "Node check: exists=" + exists + ", canExecute=" + canExecute + " (" + nodeBin + ")");
+        
+        // 列出目录内容
+        File binDir = new File(dataDir + "/deps/bin/node/bin");
+        if (binDir.exists()) {
+            String[] files = binDir.list();
+            if (files != null) {
+                Log.d(TAG, "Node bin dir contents: " + String.join(", ", files));
+            }
+        } else {
+            Log.d(TAG, "Node bin dir not exists: " + binDir.getAbsolutePath());
+        }
+        
+        return canExecute;
     }
 
     private void updatePythonStatus(boolean installed) {
