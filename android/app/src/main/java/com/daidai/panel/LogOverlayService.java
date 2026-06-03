@@ -379,6 +379,8 @@ public class LogOverlayService extends Service {
             try {
                 // 获取 JWT token
                 String token = getAuthToken();
+                Log.d(TAG, "Auth token: " + (token != null ? "exists" : "null"));
+                
                 if (token == null) {
                     mainHandler.post(() -> {
                         Toast.makeText(this, "请先登录面板", Toast.LENGTH_LONG).show();
@@ -388,13 +390,18 @@ public class LogOverlayService extends Service {
                 
                 // 调用安装 API
                 String url = "http://127.0.0.1:5701/api/v1/android-runtime/install";
+                Log.d(TAG, "Calling install API: " + url);
+                
                 HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
                 conn.setRequestMethod("POST");
                 conn.setRequestProperty("Content-Type", "application/json");
                 conn.setRequestProperty("Authorization", "Bearer " + token);
                 conn.setDoOutput(true);
+                conn.setConnectTimeout(10000);
+                conn.setReadTimeout(300000); // 5分钟超时
                 
                 String body = "{\"name\":\"" + name + "\"}";
+                Log.d(TAG, "Request body: " + body);
                 conn.getOutputStream().write(body.getBytes());
                 
                 int responseCode = conn.getResponseCode();
@@ -406,8 +413,13 @@ public class LogOverlayService extends Service {
                     String line;
                     StringBuilder result = new StringBuilder();
                     while ((line = reader.readLine()) != null) {
+                        Log.d(TAG, "SSE: " + line);
                         if (line.startsWith("data: ")) {
-                            result.append(line.substring(6)).append("\n");
+                            String msg = line.substring(6);
+                            result.append(msg).append("\n");
+                            mainHandler.post(() -> {
+                                Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+                            });
                         }
                     }
                     reader.close();
@@ -424,8 +436,11 @@ public class LogOverlayService extends Service {
                     }
                     reader.close();
                     
+                    String errorMsg = error.toString();
+                    Log.e(TAG, "Install failed: " + errorMsg);
+                    
                     mainHandler.post(() -> {
-                        Toast.makeText(this, "安装失败: " + error.toString(), Toast.LENGTH_LONG).show();
+                        Toast.makeText(this, "安装失败: " + errorMsg, Toast.LENGTH_LONG).show();
                     });
                 }
                 
