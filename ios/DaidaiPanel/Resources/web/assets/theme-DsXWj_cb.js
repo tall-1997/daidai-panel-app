@@ -1,1 +1,0 @@
-import{f as o,g as r,w as m}from"./app-core-BF80aBJ8.js";const l=o("theme",()=>{const e=r(localStorage.getItem("theme")==="dark");function a(){e.value=!e.value}return m(e,t=>{document.documentElement.classList.toggle("dark",t),localStorage.setItem("theme",t?"dark":"light")},{immediate:!0}),{isDark:e,toggleTheme:a}});export{l as u};
