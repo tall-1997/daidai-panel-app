@@ -76,7 +76,6 @@ public class PanelManager {
         Log.d(TAG, "Binary path: " + binaryPath);
         Log.d(TAG, "Binary exists: " + binaryFile.exists());
         Log.d(TAG, "Binary size: " + binaryFile.length());
-        Log.d(TAG, "Binary executable: " + binaryFile.canExecute());
 
         // 检查 web 目录
         File webDirFile = new File(webDir);
@@ -86,20 +85,21 @@ public class PanelManager {
 
         // 启动子进程
         try {
+            // 使用 sh -c 方式执行，绕过权限限制
+            Log.d(TAG, "Starting process with sh -c...");
+            
             ProcessBuilder pb = new ProcessBuilder(
-                binaryPath,
-                "-data-dir", dataDir,
-                "-web-dir", webDir,
-                "-port", String.valueOf(port)
+                "sh", "-c",
+                "chmod 755 " + binaryPath + " && " + binaryPath + 
+                " -data-dir " + dataDir + 
+                " -web-dir " + webDir + 
+                " -port " + port
             );
             
             pb.directory(new File(dataDir));
             pb.redirectErrorStream(true);
             
-            // 设置环境变量
-            pb.environment().put("GODEBUG", "asyncpreemptoff=1");
-            
-            Log.d(TAG, "Starting process...");
+            Log.d(TAG, "Executing: sh -c 'chmod 755 " + binaryPath + " && ...'");
             serverProcess = pb.start();
             processStarted = true;
             Log.d(TAG, "Process started successfully");
@@ -277,8 +277,8 @@ public class PanelManager {
             targetDir.mkdirs();
         }
 
-        // 如果已存在且可执行，直接返回
-        if (targetFile.exists() && targetFile.canExecute() && targetFile.length() > 1000000) {
+        // 如果已存在且大小正确，直接返回
+        if (targetFile.exists() && targetFile.length() > 1000000) {
             Log.d(TAG, "Binary already exists: " + targetPath + " (" + targetFile.length() + " bytes)");
             return targetPath;
         }
@@ -301,8 +301,6 @@ public class PanelManager {
             out.flush();
 
             Log.d(TAG, "Binary copied: " + total + " bytes");
-
-            targetFile.setExecutable(true, false);
             return targetPath;
         } catch (IOException e) {
             Log.e(TAG, "Failed to copy binary", e);
