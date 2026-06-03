@@ -23,7 +23,7 @@ type ProotManager struct {
 	prootFdPath string // /proc/self/fd/N 路径，用于从内存执行 proot
 }
 
-const memfdCreateSyscall = 319 // SYS_MEMFD_CREATE for arm64
+const memfdCreateSyscall = 279 // SYS_MEMFD_CREATE for arm64
 
 // memfdCreate 创建内存文件描述符
 func memfdCreate(name string, flags int) (int, error) {
@@ -37,6 +37,8 @@ func memfdCreate(name string, flags int) (int, error) {
 	}
 	return int(fd), nil
 }
+
+// loadBinaryToMemfd 将二进制文件加载到内存文件描述符
 
 var prootManager = &ProotManager{}
 
