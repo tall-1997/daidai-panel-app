@@ -164,6 +164,10 @@ public class SplashActivity extends AppCompatActivity {
             
             Log.d(TAG, "Alpine environment initialized");
             
+            // 通知 Go 代码 Alpine 环境已就绪
+            Log.d(TAG, "Notifying Go that Alpine is ready...");
+            PanelManager.getInstance(this).setAlpineReady(dataDir);
+            
         } catch (Exception e) {
             Log.e(TAG, "Failed to init Alpine environment", e);
         }

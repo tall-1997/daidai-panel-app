@@ -358,21 +358,34 @@ func ensureManagedPythonVenv(syncCreate bool) bool {
 			continue
 		}
 		
-		// 使用 sh -c 方式执行
-		// 先用 os.Chmod 设置权限
-		os.Chmod(pythonPath, 0755)
-		
-		shellCmd := pythonPath + " -m venv " + venvDir
-		log.Printf("[ensureManagedPythonVenv] Trying: /system/bin/sh -c '%s'", shellCmd)
-		cmd := exec.Command("/system/bin/sh", "-c", shellCmd)
-		out, runErr := cmd.CombinedOutput()
-		if runErr == nil {
-			log.Printf("[ensureManagedPythonVenv] Venv created successfully with %s", pythonPath)
-			venvRetryCount = 0 // 成功，重置计数
-			return true
+		// 使用 proot 在 Alpine 容器内执行
+		prootMgr := GetProotManager()
+		if prootMgr.IsInitialized() {
+			shellCmd := pythonPath + " -m venv " + venvDir
+			log.Printf("[ensureManagedPythonVenv] Trying via proot: %s", shellCmd)
+			output, err := prootMgr.ExecInAlpine(shellCmd)
+			if err == nil {
+				log.Printf("[ensureManagedPythonVenv] Venv created successfully via proot")
+				venvRetryCount = 0
+				return true
+			}
+			lastErr = fmt.Errorf("proot exec failed: %v: %s", err, output)
+			log.Printf("[ensureManagedPythonVenv] %s failed: %v", pythonPath, lastErr)
+		} else {
+			// 回退到直接执行
+			os.Chmod(pythonPath, 0755)
+			shellCmd := pythonPath + " -m venv " + venvDir
+			log.Printf("[ensureManagedPythonVenv] Trying direct: %s", shellCmd)
+			cmd := exec.Command("/system/bin/sh", "-c", shellCmd)
+			out, runErr := cmd.CombinedOutput()
+			if runErr == nil {
+				log.Printf("[ensureManagedPythonVenv] Venv created successfully")
+				venvRetryCount = 0
+				return true
+			}
+			lastErr = fmt.Errorf("%s -m venv failed: %v: %s", pythonPath, runErr, strings.TrimSpace(string(out)))
+			log.Printf("[ensureManagedPythonVenv] %s failed: %v", pythonPath, lastErr)
 		}
-		lastErr = fmt.Errorf("%s -m venv failed: %v: %s", pythonPath, runErr, strings.TrimSpace(string(out)))
-		log.Printf("[ensureManagedPythonVenv] %s failed: %v", pythonPath, lastErr)
 	}
 	
 	if lastErr != nil {
