@@ -469,6 +469,57 @@ func (h *AndroidRuntimeHandler) Install(c *gin.Context) {
 
 	emit(fmt.Sprintf("✅ 安装完成，共解压 %d 个文件", fileCount))
 	emit(fmt.Sprintf("安装位置: %s/%s", androidBinDir, req.Name))
+	
+	// 创建软链接（关键！）
+	if req.Name == "python" {
+		emit("创建 Python 软链接...")
+		binDir := filepath.Join(targetDir, "bin")
+		symlinks := map[string]string{
+			"python":  "python3.12",
+			"python3": "python3.12",
+			"pip":     "pip3.12",
+			"pip3":    "pip3.12",
+		}
+		for linkName, targetName := range symlinks {
+			linkPath := filepath.Join(binDir, linkName)
+			targetPath := filepath.Join(binDir, targetName)
+			if _, err := os.Stat(targetPath); err == nil {
+				// 删除已存在的链接
+				os.Remove(linkPath)
+				if err := os.Symlink(targetName, linkPath); err != nil {
+					emit("❌ 创建软链接失败: " + linkName + " -> " + targetName + " - " + err.Error())
+					log.Printf("[AndroidRuntime] Failed to create symlink: %v", err)
+				} else {
+					emit("✅ 创建软链接: " + linkName + " -> " + targetName)
+					log.Printf("[AndroidRuntime] Created symlink: %s -> %s", linkPath, targetPath)
+				}
+			} else {
+				emit("⚠️ 目标文件不存在: " + targetName)
+			}
+		}
+		
+		// 设置可执行权限
+		pythonBin := filepath.Join(binDir, "python3.12")
+		if err := os.Chmod(pythonBin, 0755); err != nil {
+			log.Printf("[AndroidRuntime] Failed to chmod python3.12: %v", err)
+		}
+		
+		// 验证
+		if _, err := os.Stat(filepath.Join(binDir, "python")); err == nil {
+			emit("✅ Python 安装成功")
+		} else {
+			emit("❌ Python 安装失败：软链接未创建")
+		}
+	}
+	
+	if req.Name == "node" {
+		emit("✅ Node.js 安装成功")
+		// 设置可执行权限
+		nodeBin := filepath.Join(targetDir, "bin", "node")
+		if err := os.Chmod(nodeBin, 0755); err != nil {
+			log.Printf("[AndroidRuntime] Failed to chmod node: %v", err)
+		}
+	}
 }
 
 type androidUninstallRequest struct {
