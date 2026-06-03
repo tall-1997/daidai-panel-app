@@ -57,36 +57,37 @@ public class PanelManager {
         new File(webDir).mkdirs();
         initDataDir(dataDir);
 
-        // 获取二进制路径 - nativeLibraryDir 中的 .so 文件有执行权限
-        String binaryPath = getBinaryPath();
+        // 复制二进制到可执行位置
+        String binaryPath = prepareBinary();
         if (binaryPath == null) {
-            Log.e(TAG, "Binary not found");
+            Log.e(TAG, "Failed to prepare binary");
             return;
         }
         
-        File binaryFile = new File(binaryPath);
         Log.d(TAG, "Binary: " + binaryPath);
+        File binaryFile = new File(binaryPath);
         Log.d(TAG, "Exists: " + binaryFile.exists());
         Log.d(TAG, "Size: " + binaryFile.length());
-        Log.d(TAG, "Can execute: " + binaryFile.canExecute());
 
-        if (!binaryFile.exists() || !binaryFile.canExecute()) {
-            Log.e(TAG, "Binary not executable");
-            return;
-        }
-
+        // 尝试执行
         try {
-            ProcessBuilder pb = new ProcessBuilder(
-                binaryPath,
-                "-data-dir", dataDir,
-                "-web-dir", webDir,
-                "-port", String.valueOf(port)
-            );
+            // 使用 sh -c 并设置 LD_LIBRARY_PATH
+            String nativeLibDir = context.getApplicationInfo().nativeLibraryDir;
+            String cmd = "chmod 755 " + binaryPath + " && " + binaryPath + 
+                " -data-dir " + dataDir + 
+                " -web-dir " + webDir + 
+                " -port " + port;
             
+            Log.d(TAG, "Executing: sh -c '" + cmd + "'");
+            Log.d(TAG, "LD_LIBRARY_PATH: " + nativeLibDir);
+            
+            ProcessBuilder pb = new ProcessBuilder("sh", "-c", cmd);
             pb.directory(new File(dataDir));
             pb.redirectErrorStream(true);
             
-            Log.d(TAG, "Starting process...");
+            // 设置环境变量
+            pb.environment().put("LD_LIBRARY_PATH", nativeLibDir);
+            
             serverProcess = pb.start();
             Log.d(TAG, "Process started!");
 
@@ -147,36 +148,31 @@ public class PanelManager {
     }
 
     /**
-     * 获取二进制文件路径
-     * nativeLibraryDir 中的 .so 文件会被 Android 自动解压且有执行权限
+     * 准备二进制文件
      */
-    private String getBinaryPath() {
-        // 方案1: 从 nativeLibraryDir 加载（APK 中的 .so 文件）
-        String nativeLibDir = context.getApplicationInfo().nativeLibraryDir;
-        String nativePath = nativeLibDir + "/libdaidai_server.so";
-        File nativeFile = new File(nativePath);
+    private String prepareBinary() {
+        String arch = android.os.Build.SUPPORTED_ABIS[0].contains("arm64") ? "arm64" : "armv7";
+        String assetPath = "bin/daidai-server-" + arch;
         
-        if (nativeFile.exists()) {
-            Log.d(TAG, "Found in nativeLibraryDir: " + nativePath);
-            return nativePath;
+        // 优先使用 filesDir（虽然可能没有执行权限，但通过 sh -c 尝试）
+        String targetPath = context.getFilesDir().getAbsolutePath() + "/bin/daidai-server";
+        File targetFile = new File(targetPath);
+        
+        // 如果已存在且大小正确
+        if (targetFile.exists() && targetFile.length() > 1000000) {
+            Log.d(TAG, "Binary exists: " + targetPath);
+            targetFile.setExecutable(true, false);
+            return targetPath;
         }
         
-        // 方案2: 从 assets 复制到 codeCacheDir
-        String cachePath = context.getCodeCacheDir().getAbsolutePath() + "/daidai-server";
-        File cacheFile = new File(cachePath);
-        
-        if (cacheFile.exists() && cacheFile.length() > 1000000) {
-            Log.d(TAG, "Found in codeCacheDir: " + cachePath);
-            cacheFile.setExecutable(true, false);
-            return cachePath;
-        }
-        
-        // 方案3: 从 assets 复制
-        Log.d(TAG, "Copying from assets...");
+        // 从 assets 复制
+        targetFile.getParentFile().mkdirs();
+        InputStream in = null;
+        OutputStream out = null;
         try {
-            String arch = android.os.Build.SUPPORTED_ABIS[0].contains("arm64") ? "arm64" : "armv7";
-            InputStream in = context.getAssets().open("bin/daidai-server-" + arch);
-            OutputStream out = new FileOutputStream(cacheFile);
+            Log.d(TAG, "Copying from assets: " + assetPath);
+            in = context.getAssets().open(assetPath);
+            out = new FileOutputStream(targetFile);
             
             byte[] buffer = new byte[8192];
             int read;
@@ -186,20 +182,18 @@ public class PanelManager {
                 total += read;
             }
             out.flush();
-            out.close();
-            in.close();
             
             Log.d(TAG, "Copied: " + total + " bytes");
-            cacheFile.setExecutable(true, false);
+            targetFile.setExecutable(true, false);
             
-            if (cacheFile.canExecute()) {
-                return cachePath;
-            }
+            return targetPath;
         } catch (IOException e) {
             Log.e(TAG, "Copy failed", e);
+            return null;
+        } finally {
+            try { if (in != null) in.close(); } catch (IOException ignored) {}
+            try { if (out != null) out.close(); } catch (IOException ignored) {}
         }
-        
-        return null;
     }
 
     public void stopServer() {
