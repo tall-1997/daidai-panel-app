@@ -14,11 +14,6 @@ import android.widget.TextView;
 import androidx.appcompat.app.AppCompatActivity;
 
 import java.io.File;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 
 public class SplashActivity extends AppCompatActivity {
     private static final String TAG = "SplashActivity";
@@ -36,7 +31,6 @@ public class SplashActivity extends AppCompatActivity {
     private Handler handler;
     private boolean pythonInstalled = false;
     private boolean nodeInstalled = false;
-    private boolean isInstalling = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -68,6 +62,12 @@ public class SplashActivity extends AppCompatActivity {
         statusText.setText("正在检查环境...");
         
         new Thread(() -> {
+            try {
+                Thread.sleep(500); // 短暂延迟让用户看到检查状态
+            } catch (InterruptedException e) {
+                // ignore
+            }
+            
             // 检查 Python
             pythonInstalled = checkPythonInstalled();
             handler.post(() -> updatePythonStatus(pythonInstalled));
@@ -138,110 +138,14 @@ public class SplashActivity extends AppCompatActivity {
 
     private void showInstallNeeded() {
         statusText.setText("需要安装运行时");
-        actionButton.setText("一键安装");
+        actionButton.setText("启动面板并安装");
         actionButton.setVisibility(View.VISIBLE);
-        skipButton.setVisibility(View.VISIBLE);
+        skipButton.setVisibility(View.GONE);
     }
 
     private void onActionClick() {
-        if (pythonInstalled && nodeInstalled) {
-            startMainActivity();
-        } else {
-            installMissingRuntimes();
-        }
-    }
-
-    private void installMissingRuntimes() {
-        if (isInstalling) return;
-        isInstalling = true;
-        
-        actionButton.setEnabled(false);
-        actionButton.setText("安装中...");
-        progressBar.setVisibility(View.VISIBLE);
-        progressText.setVisibility(View.VISIBLE);
-        
-        new Thread(() -> {
-            if (!pythonInstalled) {
-                installRuntime("python");
-            }
-            
-            if (!nodeInstalled) {
-                installRuntime("node");
-            }
-            
-            // 重新检查
-            pythonInstalled = checkPythonInstalled();
-            nodeInstalled = checkNodeInstalled();
-            
-            handler.post(() -> {
-                isInstalling = false;
-                progressBar.setVisibility(View.GONE);
-                progressText.setVisibility(View.GONE);
-                
-                updatePythonStatus(pythonInstalled);
-                updateNodeStatus(nodeInstalled);
-                
-                if (pythonInstalled && nodeInstalled) {
-                    showReady();
-                    statusText.setText("安装完成！请点击启动面板");
-                } else {
-                    actionButton.setEnabled(true);
-                    actionButton.setText("重试安装");
-                    statusText.setText("安装失败，请重试");
-                }
-            });
-        }).start();
-    }
-
-    private void installRuntime(String name) {
-        Log.d(TAG, "Installing " + name + "...");
-        handler.post(() -> {
-            statusText.setText("正在安装 " + name + "...");
-            progressText.setText("正在下载...");
-        });
-        
-        try {
-            // 获取 auth token
-            String token = MainActivity.authToken;
-            if (token == null) {
-                Log.e(TAG, "Auth token is null");
-                return;
-            }
-            
-            // 调用安装 API
-            String url = "http://127.0.0.1:5701/api/v1/android-runtime/install";
-            HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
-            conn.setRequestMethod("POST");
-            conn.setRequestProperty("Content-Type", "application/json");
-            conn.setRequestProperty("Authorization", "Bearer " + token);
-            conn.setDoOutput(true);
-            conn.setConnectTimeout(10000);
-            conn.setReadTimeout(300000);
-            
-            String body = "{\"name\":\"" + name + "\"}";
-            conn.getOutputStream().write(body.getBytes());
-            
-            int responseCode = conn.getResponseCode();
-            Log.d(TAG, "Install API response: " + responseCode);
-            
-            if (responseCode == 200) {
-                BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    if (line.startsWith("data: ")) {
-                        String msg = line.substring(6);
-                        Log.d(TAG, "SSE: " + msg);
-                        handler.post(() -> progressText.setText(msg));
-                    }
-                }
-                reader.close();
-            }
-            
-            conn.disconnect();
-            
-        } catch (Exception e) {
-            Log.e(TAG, "Install failed", e);
-        }
+        // 直接启动面板，在面板中安装运行时
+        startMainActivity();
     }
 
     private void startMainActivity() {
