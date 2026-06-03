@@ -91,9 +91,10 @@ func (pm *ProotManager) ExecInAlpine(command string) (string, error) {
 		return "", fmt.Errorf("Alpine rootfs not initialized")
 	}
 
-	// 使用 shell 执行 proot，绕过 Android SELinux 限制
-	prootCmd := fmt.Sprintf("%s -R %s -w /root -b /dev -b /proc -b /sys /bin/sh -c '%s'",
-		pm.prootBin, pm.rootfsDir, command)
+	// 使用 sh -c 包装 proot 命令，绕过 Android SELinux 限制
+	// 先检查 proot 是否可执行
+	prootCmd := fmt.Sprintf("if [ -x '%s' ]; then %s -R %s -w /root -b /dev -b /proc -b /sys /bin/sh -c '%s'; else echo 'proot not executable' >&2; exit 1; fi",
+		pm.prootBin, pm.prootBin, pm.rootfsDir, command)
 
 	cmd := exec.Command("/system/bin/sh", "-c", prootCmd)
 	output, err := cmd.CombinedOutput()
@@ -112,9 +113,9 @@ func (pm *ProotManager) ExecInAlpineWithEnv(command string, env map[string]strin
 		envArgs += fmt.Sprintf(" -E %s=%s", k, v)
 	}
 
-	// 使用 shell 执行 proot，绕过 Android SELinux 限制
-	prootCmd := fmt.Sprintf("%s -R %s -w /root -b /dev -b /proc -b /sys%s /bin/sh -c '%s'",
-		pm.prootBin, pm.rootfsDir, envArgs, command)
+	// 使用 sh -c 包装 proot 命令，绕过 Android SELinux 限制
+	prootCmd := fmt.Sprintf("if [ -x '%s' ]; then %s -R %s -w /root -b /dev -b /proc -b /sys%s /bin/sh -c '%s'; else echo 'proot not executable' >&2; exit 1; fi",
+		pm.prootBin, pm.prootBin, pm.rootfsDir, envArgs, command)
 
 	cmd := exec.Command("/system/bin/sh", "-c", prootCmd)
 	output, err := cmd.CombinedOutput()
