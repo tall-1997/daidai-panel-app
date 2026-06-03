@@ -20,7 +20,6 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -142,34 +141,27 @@ public class SplashActivity extends AppCompatActivity {
                 Log.d(TAG, "Alpine rootfs already exists");
             }
             
-            // 复制 proot（从 nativeLibraryDir 获取，该目录有执行权限）
+            // 复制 proot（从 assets 复制到 dataDir）
             File prootDst = new File(dataDir, "proot");
             if (!prootDst.exists()) {
-                Log.d(TAG, "Copying proot from nativeLibraryDir...");
-                String nativeLibDir = getApplicationInfo().nativeLibraryDir;
-                File prootSrc = new File(nativeLibDir, "libproot.so");
-                
-                if (prootSrc.exists()) {
-                    InputStream in = new FileInputStream(prootSrc);
-                    FileOutputStream fos = new FileOutputStream(prootDst);
-                    byte[] buffer = new byte[4096];
-                    int read;
-                    while ((read = in.read(buffer)) != -1) {
-                        fos.write(buffer, 0, read);
-                    }
-                    fos.flush();
-                    fos.close();
-                    in.close();
-                    
-                    // 设置可执行权限
-                    prootDst.setExecutable(true, false);
-                    prootDst.setReadable(true, false);
-                    
-                    Log.d(TAG, "Proot copied to: " + prootDst.getAbsolutePath());
-                    Log.d(TAG, "Proot can execute: " + prootDst.canExecute());
-                } else {
-                    Log.e(TAG, "Proot not found in nativeLibraryDir: " + prootSrc.getAbsolutePath());
+                Log.d(TAG, "Copying proot from assets...");
+                InputStream in = getAssets().open("alpine/proot");
+                FileOutputStream fos = new FileOutputStream(prootDst);
+                byte[] buffer = new byte[4096];
+                int read;
+                while ((read = in.read(buffer)) != -1) {
+                    fos.write(buffer, 0, read);
                 }
+                fos.flush();
+                fos.close();
+                in.close();
+                
+                // 设置可执行权限
+                prootDst.setExecutable(true, false);
+                prootDst.setReadable(true, false);
+                
+                Log.d(TAG, "Proot copied to: " + prootDst.getAbsolutePath());
+                Log.d(TAG, "Proot can execute: " + prootDst.canExecute());
             } else {
                 Log.d(TAG, "Proot already exists");
                 // 确保权限正确
