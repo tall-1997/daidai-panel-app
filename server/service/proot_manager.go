@@ -40,62 +40,28 @@ func (pm *ProotManager) InitAlpineRootfs(dataDir string) error {
 	pm.rootfsDir = filepath.Join(dataDir, "alpine")
 	pm.prootBin = filepath.Join(dataDir, "proot")
 
-	// 检查是否已初始化
+	// 检查是否已初始化（由 Java 代码完成解压）
 	if _, err := os.Stat(filepath.Join(pm.rootfsDir, "bin", "sh")); err == nil {
 		pm.initialized = true
 		log.Printf("[ProotManager] Alpine rootfs already initialized: %s", pm.rootfsDir)
 		return nil
 	}
 
-	// 解压 Alpine rootfs
-	log.Printf("[ProotManager] Extracting Alpine rootfs...")
-	os.MkdirAll(pm.rootfsDir, 0755)
+	// Alpine rootfs 尚未解压，等待 Java 代码完成
+	log.Printf("[ProotManager] Alpine rootfs not found, waiting for Java to extract...")
+	return fmt.Errorf("alpine rootfs not initialized yet")
+}
+
+// SetInitialized 标记为已初始化（由 Java 代码调用）
+func (pm *ProotManager) SetInitialized(dataDir string) {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
 	
-	alpineTarGz := filepath.Join(dataDir, "alpine-rootfs.tar.gz")
-	if _, err := os.Stat(alpineTarGz); os.IsNotExist(err) {
-		// 尝试从 assets 目录复制
-		assetsDir := filepath.Join(filepath.Dir(dataDir), "assets")
-		srcFile := filepath.Join(assetsDir, "alpine", "alpine-rootfs.tar.gz")
-		if _, err := os.Stat(srcFile); err == nil {
-			log.Printf("[ProotManager] Copying from assets: %s", srcFile)
-			if err := prootCopyFile(srcFile, alpineTarGz); err != nil {
-				return fmt.Errorf("failed to copy alpine rootfs: %v", err)
-			}
-		} else {
-			return fmt.Errorf("alpine rootfs not found at: %s or %s", alpineTarGz, srcFile)
-		}
-	}
-
-	// 解压
-	log.Printf("[ProotManager] Extracting %s to %s", alpineTarGz, pm.rootfsDir)
-	cmd := exec.Command("tar", "xzf", alpineTarGz, "-C", pm.rootfsDir)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("failed to extract alpine rootfs: %v, output: %s", err, string(output))
-	}
-
-	// 复制 proot
-	prootSrc := filepath.Join(filepath.Dir(dataDir), "assets", "alpine", "proot")
-	if _, err := os.Stat(prootSrc); err == nil {
-		log.Printf("[ProotManager] Copying proot from: %s", prootSrc)
-		if err := prootCopyFile(prootSrc, pm.prootBin); err != nil {
-			return fmt.Errorf("failed to copy proot: %v", err)
-		}
-		os.Chmod(pm.prootBin, 0755)
-	}
-
-	// 设置 DNS
-	dnsContent := "nameserver 8.8.8.8\nnameserver 8.8.4.4\n"
-	os.WriteFile(filepath.Join(pm.rootfsDir, "etc", "resolv.conf"), []byte(dnsContent), 0644)
-
-	// 验证
-	if _, err := os.Stat(filepath.Join(pm.rootfsDir, "bin", "sh")); err != nil {
-		return fmt.Errorf("alpine rootfs verification failed: %v", err)
-	}
-
+	pm.dataDir = dataDir
+	pm.rootfsDir = filepath.Join(dataDir, "alpine")
+	pm.prootBin = filepath.Join(dataDir, "proot")
 	pm.initialized = true
-	log.Printf("[ProotManager] Alpine rootfs initialized successfully")
-	return nil
+	log.Printf("[ProotManager] Alpine rootfs initialized by Java: %s", pm.rootfsDir)
 }
 
 // IsInitialized 检查是否已初始化

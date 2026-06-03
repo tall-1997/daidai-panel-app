@@ -172,4 +172,16 @@ public class PanelManager {
     }
 
     public String getVersion() { return "0.0.1"; }
+    
+    /**
+     * 通知 Alpine 环境已就绪
+     */
+    public void setAlpineReady(String dataDir) {
+        try {
+            String result = panel.setAlpineReady(dataDir);
+            Log.d(TAG, "setAlpineReady result: " + result);
+        } catch (Exception e) {
+            Log.e(TAG, "setAlpineReady failed", e);
+        }
+    }
 }

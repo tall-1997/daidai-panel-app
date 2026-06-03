@@ -124,8 +124,9 @@ func (s *MobileServer) Start(dataDir, webDir string, port int) error {
 	
 	// Initialize Alpine + proot environment
 	prootMgr := service.GetProotManager()
+	// 尝试初始化，如果失败则等待 Java 代码完成
 	if err := prootMgr.InitAlpineRootfs(cfg.Data.Dir); err != nil {
-		log.Printf("[Mobile] Warning: Failed to init Alpine rootfs: %v", err)
+		log.Printf("[Mobile] Alpine rootfs not ready yet: %v", err)
 	} else {
 		log.Printf("[Mobile] Alpine rootfs initialized successfully")
 	}

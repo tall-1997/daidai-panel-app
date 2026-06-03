@@ -98,12 +98,19 @@ public class MainActivity extends AppCompatActivity {
                     // 解压
                     ProcessBuilder pb = new ProcessBuilder("tar", "xzf", 
                         tmpFile.getAbsolutePath(), "-C", alpineDir.getAbsolutePath());
-                    pb.start().waitFor();
+                    Process process = pb.start();
+                    int exitCode = process.waitFor();
+                    Log.d(TAG, "Alpine rootfs extract exit code: " + exitCode);
                     
                     // 删除临时文件
                     tmpFile.delete();
                     
-                    Log.d(TAG, "Alpine rootfs extracted to: " + alpineDir.getAbsolutePath());
+                    // 验证
+                    if (alpineBin.exists()) {
+                        Log.d(TAG, "Alpine rootfs extracted successfully");
+                    } else {
+                        Log.e(TAG, "Alpine rootfs extraction failed");
+                    }
                 } else {
                     Log.d(TAG, "Alpine rootfs already exists");
                 }
@@ -128,9 +135,18 @@ public class MainActivity extends AppCompatActivity {
                     Log.d(TAG, "Proot already exists");
                 }
                 
-                // 初始化 ProotManager
-                Log.d(TAG, "Initializing ProotManager...");
-                // 这里会由 Go 代码调用 InitAlpineRootfs
+                // 设置 DNS
+                File resolvConf = new File(alpineDir, "etc/resolv.conf");
+                if (!resolvConf.exists()) {
+                    resolvConf.getParentFile().mkdirs();
+                    FileOutputStream fos = new FileOutputStream(resolvConf);
+                    fos.write("nameserver 8.8.8.8\nnameserver 8.8.4.4\n".getBytes());
+                    fos.close();
+                }
+                
+                // 通知 Go 代码初始化完成
+                Log.d(TAG, "Alpine environment ready, notifying Go...");
+                PanelManager.getInstance(this).setAlpineReady(dataDir);
                 
             } catch (Exception e) {
                 Log.e(TAG, "Failed to init Alpine environment", e);

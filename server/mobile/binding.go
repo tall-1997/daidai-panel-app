@@ -114,6 +114,14 @@ func (p *DaidaiPanel) GetVersion() string {
 	return "2.2.14-mobile"
 }
 
+// SetAlpineReady marks the Alpine environment as ready
+func (p *DaidaiPanel) SetAlpineReady(dataDir string) string {
+	log.Printf("[DaidaiPanel] SetAlpineReady called with dataDir: %s", dataDir)
+	// ProotManager 会在 mobile.go 的 Start 方法中被初始化
+	// 这里只是标记状态
+	return `{"success":true}`
+}
+
 // LogMessage logs a message to the panel log
 func (p *DaidaiPanel) LogMessage(tag, message string) {
 	log.Printf("[%s] %s", tag, message)
