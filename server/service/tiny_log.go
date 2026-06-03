@@ -24,7 +24,23 @@ type TinyLog struct {
 }
 
 func NewTinyLog(logID string) (*TinyLog, error) {
-	tmpFile, err := os.CreateTemp("", "daidai-log-"+logID+"-*.log")
+	// 使用应用私有目录而不是系统临时目录
+	// Android 上 /data/local/tmp 可能没有写入权限
+	tmpDir := os.TempDir()
+	if tmpDir == "" || tmpDir == "/tmp" {
+		// 如果临时目录不可用，使用当前目录
+		cwd, err := os.Getwd()
+		if err == nil {
+			tmpDir = cwd
+		} else {
+			tmpDir = "."
+		}
+	}
+	
+	// 确保目录存在
+	os.MkdirAll(tmpDir, 0755)
+	
+	tmpFile, err := os.CreateTemp(tmpDir, "daidai-log-"+logID+"-*.log")
 	if err != nil {
 		return nil, err
 	}

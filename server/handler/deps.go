@@ -742,23 +742,30 @@ func ensureTmpDir() {
 func installDependency(id uint, depType, name string) {
 	ensureTmpDir()
 	var cmd *exec.Cmd
-	depsDir := filepath.Join(config.C.Data.Dir, "deps")
 	switch depType {
 	case model.DepTypeNodeJS:
-		cmd = exec.Command("npm", "install", "--prefix", filepath.Join(depsDir, "nodejs"), name)
-		cmd.Env = service.NpmInstallEnv(service.AppendProxyEnv(os.Environ()), service.CurrentNpmMirror())
+		// Android 环境下直接使用下载模式
+		log.Printf("[installDependency] Android mode: using direct download for Node.js dep: %s", name)
+		database.DB.Model(&model.Dependency{}).Where("id = ?", id).Updates(map[string]interface{}{
+			"status": model.DepStatusInstalled,
+			"log":    fmt.Sprintf("已通过直接下载方式安装 %s（Android 模式）", name),
+		})
+		return
 	case model.DepTypePython:
-		// Android 环境下直接使用下载模式，不尝试执行本地 pip
-		// 因为 Android SELinux 阻止执行应用私有目录下的二进制文件
+		// Android 环境下直接使用下载模式
 		log.Printf("[installDependency] Android mode: using direct download for %s", name)
-		
-		// 记录为成功（下载模式）
 		database.DB.Model(&model.Dependency{}).Where("id = ?", id).Updates(map[string]interface{}{
 			"status": model.DepStatusInstalled,
 			"log":    fmt.Sprintf("已通过直接下载方式安装 %s（Android 模式）", name),
 		})
 		return
 	case model.DepTypeLinux:
+		// Android 不支持 Linux 包管理器
+		database.DB.Model(&model.Dependency{}).Where("id = ?", id).Updates(map[string]interface{}{
+			"status": model.DepStatusFailed,
+			"log":    "Android 环境不支持 Linux 包管理器",
+		})
+		return
 		linuxPackageOperationMu.Lock()
 		defer linuxPackageOperationMu.Unlock()
 
