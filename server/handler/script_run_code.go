@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"daidai-panel/config"
 	"daidai-panel/model"
 	"daidai-panel/pkg/response"
 	"daidai-panel/service"
@@ -30,7 +31,8 @@ func (h *ScriptHandler) RunCode(c *gin.Context) {
 		return
 	}
 
-	tmpDir := filepath.Join(os.TempDir(), "daidai-debug")
+	// 使用应用数据目录而不是系统临时目录
+	tmpDir := filepath.Join(config.C.Data.Dir, "tmp", "daidai-debug")
 	os.MkdirAll(tmpDir, 0755)
 
 	tmpFile := filepath.Join(tmpDir, fmt.Sprintf("code_%d%s", time.Now().UnixMilli(), ext))

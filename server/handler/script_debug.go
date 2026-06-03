@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"daidai-panel/config"
 	"daidai-panel/model"
 	"daidai-panel/pkg/response"
 	"daidai-panel/service"
@@ -190,7 +191,9 @@ func (h *ScriptHandler) DebugRun(c *gin.Context) {
 func prepareInlineDebugFile(requestPath, ext string) (full string, workDir string, cleanupFn func(), err error) {
 	cleanupFn = func() {}
 	fileName := fmt.Sprintf("debug_%d%s", time.Now().UnixMilli(), ext)
-	workDir = filepath.Join(os.TempDir(), "daidai-debug")
+	// 使用应用数据目录而不是系统临时目录
+	workDir = filepath.Join(config.C.Data.Dir, "tmp", "daidai-debug")
+	os.MkdirAll(workDir, 0755)
 
 	if trimmedPath := strings.TrimSpace(requestPath); trimmedPath != "" {
 		resolvedPath, resolveErr := safePath(trimmedPath, true)
