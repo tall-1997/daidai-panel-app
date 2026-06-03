@@ -101,9 +101,17 @@ public class SplashActivity extends AppCompatActivity {
                 Log.d(TAG, "Extracting Alpine rootfs from assets...");
                 alpineDir.mkdirs();
                 
-                // 从 assets 解压
-                InputStream in = getAssets().open("alpine/alpine-rootfs.tar.gz");
-                File tmpFile = new File(dataDir, "alpine-rootfs.tar.gz");
+                // 从 assets 解压（注意：APK 中可能是 .tar 或 .tar.gz）
+                InputStream in = null;
+                try {
+                    in = getAssets().open("alpine/alpine-rootfs.tar.gz");
+                } catch (IOException e) {
+                    Log.d(TAG, "Trying .tar extension...");
+                    in = getAssets().open("alpine/alpine-rootfs.tar");
+                }
+                
+                // 保存到临时文件
+                File tmpFile = new File(dataDir, "alpine-rootfs.tar");
                 FileOutputStream fos = new FileOutputStream(tmpFile);
                 byte[] buffer = new byte[4096];
                 int read;
@@ -115,7 +123,7 @@ public class SplashActivity extends AppCompatActivity {
                 in.close();
                 
                 // 解压
-                ProcessBuilder pb = new ProcessBuilder("tar", "xzf", 
+                ProcessBuilder pb = new ProcessBuilder("tar", "xf", 
                     tmpFile.getAbsolutePath(), "-C", alpineDir.getAbsolutePath());
                 Process process = pb.start();
                 int exitCode = process.waitFor();
