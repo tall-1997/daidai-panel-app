@@ -185,6 +185,70 @@ func currentManagedRuntimePaths() managedRuntimePaths {
 	}
 }
 
+// fixPythonPermissionsRecursive 递归修复Python目录权限（包含SELinux上下文）
+func fixPythonPermissionsRecursive(pythonRoot string) error {
+	// 1. 递归给所有文件添加用户可执行权限
+	err := filepath.Walk(pythonRoot, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		return os.Chmod(path, 0755)
+	})
+	if err != nil {
+		return err
+	}
+
+	// 2. 修复SELinux上下文（Android专属，必须加）
+	cmd := exec.Command("chcon", "-R", "u:object_r:app_data_file:s0", pythonRoot)
+	if runErr := cmd.Run(); runErr != nil {
+		log.Printf("[fixPythonPermissions] chcon failed (may not be supported): %v", runErr)
+		// chcon 失败不算致命错误
+	}
+
+	log.Printf("[fixPythonPermissions] Permissions fixed for: %s", pythonRoot)
+	return nil
+}
+
+// ensurePythonReady 执行python/pip命令前必须调用
+func ensurePythonReady() error {
+	dataDir := ""
+	if config.C != nil {
+		dataDir = config.C.Data.Dir
+	}
+	if strings.TrimSpace(dataDir) == "" {
+		return fmt.Errorf("data dir not configured")
+	}
+
+	pythonBinDir := filepath.Join(dataDir, "deps", "bin", "python", "bin")
+
+	// 检查核心解释器是否有执行权限
+	interpreters := []string{"python3.12", "python3", "python", "pip3"}
+	needFix := false
+
+	for _, bin := range interpreters {
+		path := filepath.Join(pythonBinDir, bin)
+		info, err := os.Stat(path)
+		if err != nil {
+			continue
+		}
+		if info.Mode()&0100 == 0 {
+			log.Printf("[ensurePythonReady] %s has no execute permission, need fix", bin)
+			needFix = true
+			break
+		}
+	}
+
+	if needFix {
+		log.Printf("[ensurePythonReady] Detected Python files have no execute permission, fixing...")
+		return fixPythonPermissionsRecursive(pythonBinDir)
+	}
+	return nil
+}
+
+// 虚拟环境重试计数器
+var venvRetryCount = 0
+const maxVenvRetries = 3
+
 func ensureManagedPythonVenv(syncCreate bool) bool {
 	dataDir := ""
 	if config.C != nil {
@@ -211,6 +275,12 @@ func ensureManagedPythonVenv(syncCreate bool) bool {
 		return true
 	}
 
+	// 检查重试次数，避免无限循环
+	if venvRetryCount >= maxVenvRetries {
+		log.Printf("[ensureManagedPythonVenv] Max retries (%d) reached, skipping venv creation", maxVenvRetries)
+		return false
+	}
+
 	_ = os.MkdirAll(filepath.Dir(venvDir), 0o755)
 	
 	// 硬编码绝对路径
@@ -218,17 +288,11 @@ func ensureManagedPythonVenv(syncCreate bool) bool {
 	pythonBin := filepath.Join(dataDir, "deps", "bin", "python", "bin", "python")
 	python3Link := filepath.Join(dataDir, "deps", "bin", "python", "bin", "python3")
 	
-	// 关键：执行前强制修复权限（解决 Android 16 权限限制）
-	pythonBinDir := filepath.Join(dataDir, "deps", "bin", "python", "bin")
-	if _, err := os.Stat(pythonBinDir); err == nil {
-		log.Printf("[ensureManagedPythonVenv] Fixing permissions for: %s", pythonBinDir)
-		filepath.Walk(pythonBinDir, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return nil
-			}
-			os.Chmod(path, 0755)
-			return nil
-		})
+	// 关键：执行前强制修复权限
+	if err := ensurePythonReady(); err != nil {
+		log.Printf("[ensureManagedPythonVenv] Failed to fix permissions: %v", err)
+		venvRetryCount++
+		return false
 	}
 	
 	log.Printf("[ensureManagedPythonVenv] Creating venv at: %s", venvDir)
@@ -246,14 +310,12 @@ func ensureManagedPythonVenv(syncCreate bool) bool {
 			continue
 		}
 		
-		// 确保文件可执行
-		os.Chmod(pythonPath, 0755)
-		
 		log.Printf("[ensureManagedPythonVenv] Trying: %s -m venv %s", pythonPath, venvDir)
 		cmd := exec.Command(pythonPath, "-m", "venv", venvDir)
 		out, runErr := cmd.CombinedOutput()
 		if runErr == nil {
 			log.Printf("[ensureManagedPythonVenv] Venv created successfully with %s", pythonPath)
+			venvRetryCount = 0 // 成功，重置计数
 			return true
 		}
 		lastErr = fmt.Errorf("%s -m venv failed: %v: %s", pythonPath, runErr, strings.TrimSpace(string(out)))
@@ -261,7 +323,8 @@ func ensureManagedPythonVenv(syncCreate bool) bool {
 	}
 	
 	if lastErr != nil {
-		log.Printf("warn: managed python venv create failed: %v (auto-install will fall back to system pip with --break-system-packages)", lastErr)
+		venvRetryCount++
+		log.Printf("warn: managed python venv create failed (attempt %d/%d): %v", venvRetryCount, maxVenvRetries, lastErr)
 	}
 	return false
 }
