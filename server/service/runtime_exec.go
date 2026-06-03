@@ -310,8 +310,11 @@ func ensureManagedPythonVenv(syncCreate bool) bool {
 			continue
 		}
 		
-		// 使用 sh -c 方式执行，先设置权限再执行命令
-		shellCmd := "chmod 755 " + pythonPath + " && " + pythonPath + " -m venv " + venvDir
+		// 使用 sh -c 方式执行
+		// 先用 os.Chmod 设置权限
+		os.Chmod(pythonPath, 0755)
+		
+		shellCmd := pythonPath + " -m venv " + venvDir
 		log.Printf("[ensureManagedPythonVenv] Trying: /system/bin/sh -c '%s'", shellCmd)
 		cmd := exec.Command("/system/bin/sh", "-c", shellCmd)
 		out, runErr := cmd.CombinedOutput()

@@ -778,9 +778,18 @@ func installDependency(id uint, depType, name string) {
 			return
 		}
 		
-		// 使用 sh -c 方式执行，先设置权限再执行命令
+		// 关键：执行前用 Go 的 os.Chmod 设置权限
+		log.Printf("[installDependency] Setting permissions for: %s", pipBin)
+		os.Chmod(pipBin, 0755)
+		// 同时设置 python3.12 的权限
+		pythonBin := filepath.Join(filepath.Dir(pipBin), "python3.12")
+		if _, err := os.Stat(pythonBin); err == nil {
+			os.Chmod(pythonBin, 0755)
+		}
+		
+		// 使用 sh -c 方式执行
 		pipArgs := service.BuildPipInstallArgs(extraFlags, name)
-		shellCmd := "chmod 755 " + pipBin + " && " + pipBin + " " + strings.Join(pipArgs, " ")
+		shellCmd := pipBin + " " + strings.Join(pipArgs, " ")
 		log.Printf("[installDependency] Installing Python dep: %s", shellCmd)
 		
 		cmd = exec.Command("/system/bin/sh", "-c", shellCmd)
