@@ -14,7 +14,6 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.PixelFormat;
 import android.os.Build;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
@@ -31,7 +30,6 @@ import androidx.core.app.NotificationCompat;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -153,7 +151,6 @@ public class LogOverlayService extends Service {
         params.x = 16;
         params.y = 100;
 
-        // 创建自定义圆形按钮
         overlayView = new View(this) {
             private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
             
@@ -164,12 +161,10 @@ public class LogOverlayService extends Service {
                 float centerY = getHeight() / 2f;
                 float radius = Math.min(centerX, centerY) - 2;
                 
-                // 绘制圆形背景
                 paint.setColor(Color.parseColor("#667eea"));
                 paint.setStyle(Paint.Style.FILL);
                 canvas.drawCircle(centerX, centerY, radius, paint);
                 
-                // 绘制白色 "L" 字母
                 paint.setColor(Color.WHITE);
                 paint.setTextSize(radius * 1.2f);
                 paint.setTextAlign(Paint.Align.CENTER);
@@ -179,7 +174,6 @@ public class LogOverlayService extends Service {
             }
         };
 
-        // 设置触摸事件
         overlayView.setOnTouchListener(new View.OnTouchListener() {
             private int initialX, initialY;
             private float initialTouchX, initialTouchY;
@@ -261,13 +255,11 @@ public class LogOverlayService extends Service {
         menuParams.x = params.x + (int) (56 * getResources().getDisplayMetrics().density);
         menuParams.y = params.y;
 
-        // 创建菜单视图
         LinearLayout menuLayout = new LinearLayout(this);
         menuLayout.setOrientation(LinearLayout.VERTICAL);
         menuLayout.setBackgroundColor(Color.WHITE);
         menuLayout.setElevation(8 * getResources().getDisplayMetrics().density);
         
-        // 添加菜单项
         addMenuItem(menuLayout, "导出日志", () -> exportLogs());
         addMenuItem(menuLayout, "安装 Python", () -> installRuntime("python"));
         addMenuItem(menuLayout, "安装 Node.js", () -> installRuntime("node"));
@@ -339,7 +331,6 @@ public class LogOverlayService extends Service {
                 String fileName = "daidai-log-" + 
                     new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.getDefault()).format(new Date()) + ".txt";
                 
-                // 使用应用私有目录，不需要存储权限
                 File logDir = new File(getFilesDir(), "logs");
                 if (!logDir.exists()) {
                     logDir.mkdirs();
@@ -357,7 +348,6 @@ public class LogOverlayService extends Service {
                 mainHandler.post(() -> {
                     Toast.makeText(this, "日志已保存到: " + filePath, Toast.LENGTH_LONG).show();
                     
-                    // 复制到剪贴板
                     ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
                     if (clipboard != null) {
                         ClipData clip = ClipData.newPlainText("daidai-log", logs);
@@ -380,87 +370,113 @@ public class LogOverlayService extends Service {
         Toast.makeText(this, "正在安装 " + name + "...", Toast.LENGTH_SHORT).show();
         
         executor.execute(() -> {
-            try {
-                // 获取 JWT token
-                String token = getAuthToken();
-                Log.d(TAG, "Auth token: " + (token != null ? "exists" : "null"));
-                
-                if (token == null) {
-                    mainHandler.post(() -> {
-                        Toast.makeText(this, "请先登录面板", Toast.LENGTH_LONG).show();
-                    });
-                    return;
-                }
-                
-                // 调用安装 API
-                String url = "http://127.0.0.1:5701/api/v1/android-runtime/install";
-                Log.d(TAG, "Calling install API: " + url);
-                
-                HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
-                conn.setRequestMethod("POST");
-                conn.setRequestProperty("Content-Type", "application/json");
-                conn.setRequestProperty("Authorization", "Bearer " + token);
-                conn.setDoOutput(true);
-                conn.setConnectTimeout(10000);
-                conn.setReadTimeout(300000); // 5分钟超时
-                
-                String body = "{\"name\":\"" + name + "\"}";
-                Log.d(TAG, "Request body: " + body);
-                conn.getOutputStream().write(body.getBytes());
-                
-                int responseCode = conn.getResponseCode();
-                Log.d(TAG, "Install API response: " + responseCode);
-                
-                if (responseCode == 200) {
-                    // 读取 SSE 响应
-                    BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-                    String line;
-                    StringBuilder result = new StringBuilder();
-                    while ((line = reader.readLine()) != null) {
-                        Log.d(TAG, "SSE: " + line);
-                        if (line.startsWith("data: ")) {
-                            String msg = line.substring(6);
-                            result.append(msg).append("\n");
+            int maxRetries = 3;
+            int retryCount = 0;
+            Exception lastException = null;
+            
+            while (retryCount < maxRetries) {
+                try {
+                    String token = getAuthToken();
+                    Log.d(TAG, "Auth token: " + (token != null ? "exists" : "null"));
+                    
+                    if (token == null) {
+                        mainHandler.post(() -> {
+                            Toast.makeText(this, "请先登录面板", Toast.LENGTH_LONG).show();
+                        });
+                        return;
+                    }
+                    
+                    String url = "http://127.0.0.1:5701/api/v1/android-runtime/install";
+                    Log.d(TAG, "Calling install API (attempt " + (retryCount + 1) + "): " + url);
+                    
+                    HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+                    conn.setRequestMethod("POST");
+                    conn.setRequestProperty("Content-Type", "application/json");
+                    conn.setRequestProperty("Authorization", "Bearer " + token);
+                    conn.setDoOutput(true);
+                    conn.setConnectTimeout(10000);
+                    conn.setReadTimeout(300000);
+                    
+                    String body = "{\"name\":\"" + name + "\"}";
+                    Log.d(TAG, "Request body: " + body);
+                    conn.getOutputStream().write(body.getBytes());
+                    
+                    int responseCode = conn.getResponseCode();
+                    Log.d(TAG, "Install API response: " + responseCode);
+                    
+                    if (responseCode == 200) {
+                        BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                        String line;
+                        while ((line = reader.readLine()) != null) {
+                            Log.d(TAG, "SSE: " + line);
+                            if (line.startsWith("data: ")) {
+                                String msg = line.substring(6);
+                                mainHandler.post(() -> {
+                                    Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+                                });
+                            }
+                        }
+                        reader.close();
+                        conn.disconnect();
+                        
+                        mainHandler.post(() -> {
+                            Toast.makeText(this, name + " 安装完成", Toast.LENGTH_LONG).show();
+                        });
+                        return;
+                    } else {
+                        BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getErrorStream()));
+                        String line;
+                        StringBuilder error = new StringBuilder();
+                        while ((line = reader.readLine()) != null) {
+                            error.append(line);
+                        }
+                        reader.close();
+                        conn.disconnect();
+                        
+                        String errorMsg = error.toString();
+                        Log.e(TAG, "Install failed (attempt " + (retryCount + 1) + "): " + errorMsg);
+                        
+                        lastException = new Exception(errorMsg);
+                        retryCount++;
+                        
+                        if (retryCount < maxRetries) {
+                            final int currentRetry = retryCount;
                             mainHandler.post(() -> {
-                                Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+                                Toast.makeText(this, "下载失败，正在重试... (" + currentRetry + "/" + maxRetries + ")", Toast.LENGTH_SHORT).show();
                             });
+                            Thread.sleep(2000);
                         }
                     }
-                    reader.close();
                     
-                    mainHandler.post(() -> {
-                        Toast.makeText(this, name + " 安装完成", Toast.LENGTH_LONG).show();
-                    });
-                } else {
-                    BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getErrorStream()));
-                    String line;
-                    StringBuilder error = new StringBuilder();
-                    while ((line = reader.readLine()) != null) {
-                        error.append(line);
+                } catch (Exception e) {
+                    Log.e(TAG, "Install failed (attempt " + (retryCount + 1) + ")", e);
+                    lastException = e;
+                    retryCount++;
+                    
+                    if (retryCount < maxRetries) {
+                        final int currentRetry = retryCount;
+                        mainHandler.post(() -> {
+                            Toast.makeText(this, "下载失败，正在重试... (" + currentRetry + "/" + maxRetries + ")", Toast.LENGTH_SHORT).show();
+                        });
+                        try {
+                            Thread.sleep(2000);
+                        } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                            return;
+                        }
                     }
-                    reader.close();
-                    
-                    String errorMsg = error.toString();
-                    Log.e(TAG, "Install failed: " + errorMsg);
-                    
-                    mainHandler.post(() -> {
-                        Toast.makeText(this, "安装失败: " + errorMsg, Toast.LENGTH_LONG).show();
-                    });
                 }
-                
-                conn.disconnect();
-                
-            } catch (Exception e) {
-                Log.e(TAG, "Install failed", e);
-                mainHandler.post(() -> {
-                    Toast.makeText(this, "安装失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                });
             }
+            
+            String errorMsg = lastException != null ? lastException.getMessage() : "未知错误";
+            Log.e(TAG, "Install failed after " + maxRetries + " attempts: " + errorMsg);
+            mainHandler.post(() -> {
+                Toast.makeText(this, "安装失败: " + errorMsg, Toast.LENGTH_LONG).show();
+            });
         });
     }
 
     private String getAuthToken() {
-        // 从 MainActivity 获取 token
         return MainActivity.authToken;
     }
 
@@ -474,12 +490,11 @@ public class LogOverlayService extends Service {
         sb.append("系统版本: Android ").append(Build.VERSION.RELEASE).append(" (API ").append(Build.VERSION.SDK_INT).append(")\n");
         sb.append("应用版本: 0.0.1\n\n");
 
-        // 面板日志
         sb.append("=== 面板服务日志 ===\n");
         File panelLog = new File(getFilesDir(), "Dumb-Panel/panel.log");
         if (panelLog.exists()) {
             try {
-                BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(panelLog)));
+                BufferedReader reader = new BufferedReader(new InputStreamReader(new java.io.FileInputStream(panelLog)));
                 String line;
                 int lineCount = 0;
                 while ((line = reader.readLine()) != null && lineCount < 500) {
@@ -494,7 +509,6 @@ public class LogOverlayService extends Service {
             sb.append("日志文件不存在\n");
         }
 
-        // 文件检查
         sb.append("\n=== 文件检查 ===\n");
         File webDir = new File(getFilesDir(), "web");
         File indexFile = new File(webDir, "index.html");
