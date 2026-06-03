@@ -3,21 +3,14 @@ package com.daidai.panel;
 import android.content.Context;
 import android.util.Log;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import mobile.DaidaiPanel;
+
 /**
- * 面板管理器
- * 由于 Android SELinux 限制，无法直接执行 Go 二进制
- * 改为使用 WebView 直接加载本地 HTML 文件
+ * 面板管理器 - 使用 gomobile 调用 Go 后端
  */
 public class PanelManager {
     private static final String TAG = "PanelManager";
@@ -27,6 +20,7 @@ public class PanelManager {
     private volatile boolean isRunning = false;
     private int port = 5701;
     private final AtomicBoolean serverStarted = new AtomicBoolean(false);
+    private DaidaiPanel panel;
 
     public static PanelManager getInstance(Context context) {
         if (instance == null) {
@@ -41,11 +35,11 @@ public class PanelManager {
 
     private PanelManager(Context context) {
         this.context = context;
+        this.panel = new DaidaiPanel();
     }
 
     /**
-     * 启动服务器（模拟）
-     * 由于 Android 限制，使用 WebView 直接加载本地文件
+     * 启动面板服务器
      */
     public synchronized void startServer(String dataDir, String webDir, int port) {
         if (serverStarted.get()) {
@@ -56,58 +50,125 @@ public class PanelManager {
         
         this.port = port;
         Log.d(TAG, "========================================");
-        Log.d(TAG, "startServer (WebView mode)");
+        Log.d(TAG, "startServer (gomobile)");
         Log.d(TAG, "Data: " + dataDir);
         Log.d(TAG, "Web: " + webDir);
         Log.d(TAG, "Port: " + port);
 
-        // 创建数据目录
-        new File(dataDir).mkdirs();
-        new File(webDir).mkdirs();
-        initDataDir(dataDir);
-        
-        // 标记为运行中（WebView 模式）
-        isRunning = true;
-        
-        Log.d(TAG, "========================================");
-        Log.d(TAG, "Server READY! (WebView mode)");
-        Log.d(TAG, "========================================");
+        // 在后台线程启动服务器
+        new Thread(() -> {
+            try {
+                Log.d(TAG, "Calling Go StartServer...");
+                String result = panel.startServer(dataDir, webDir, port);
+                Log.d(TAG, "StartServer result: " + result);
+                
+                if (result.contains("\"success\":true")) {
+                    isRunning = true;
+                    Log.d(TAG, "========================================");
+                    Log.d(TAG, "Server READY!");
+                    Log.d(TAG, "========================================");
+                } else {
+                    Log.e(TAG, "Server failed to start: " + result);
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "StartServer exception", e);
+            }
+        }, "GoServerStarter").start();
+
+        // HTTP 轮询检测
+        new Thread(() -> {
+            Log.d(TAG, "HTTP poll started");
+            for (int i = 1; i <= 60; i++) {
+                try {
+                    Thread.sleep(1000);
+                    
+                    if (checkHttpPort()) {
+                        isRunning = true;
+                        Log.d(TAG, "Server READY via HTTP! (" + i + "s)");
+                        return;
+                    }
+                    
+                    if (i % 5 == 0) Log.d(TAG, "Waiting... " + i + "s");
+                } catch (InterruptedException e) {
+                    return;
+                }
+            }
+            Log.e(TAG, "TIMEOUT (60s)");
+        }, "HttpPoller").start();
     }
 
+    /**
+     * 停止服务器
+     */
     public void stopServer() {
         Log.d(TAG, "stopServer");
+        try {
+            String result = panel.stopServer();
+            Log.d(TAG, "StopServer result: " + result);
+        } catch (Exception e) {
+            Log.e(TAG, "StopServer exception", e);
+        }
         isRunning = false;
         serverStarted.set(false);
     }
 
+    /**
+     * 检查服务器是否运行中
+     */
     public boolean isServerRunning() {
-        return isRunning;
+        if (isRunning) {
+            return true;
+        }
+        
+        // 尝试通过 Go 代码检查
+        try {
+            boolean running = panel.isServerRunning();
+            if (running) {
+                isRunning = true;
+                return true;
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "isServerRunning exception", e);
+        }
+        
+        return checkHttpPort();
+    }
+
+    /**
+     * HTTP 端口检测
+     */
+    private boolean checkHttpPort() {
+        HttpURLConnection conn = null;
+        try {
+            URL url = new URL("http://127.0.0.1:" + port);
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setConnectTimeout(2000);
+            conn.setReadTimeout(2000);
+            conn.setRequestMethod("GET");
+            conn.setUseCaches(false);
+            int code = conn.getResponseCode();
+            return code > 0;
+        } catch (Exception e) {
+            return false;
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
     }
 
     public int getServerPort() { return port; }
     public String getServerURL() { return "http://127.0.0.1:" + port; }
-    
-    /**
-     * 获取 WebView 本地文件 URL
-     */
-    public String getLocalUrl() {
-        String webDir = context.getFilesDir().getAbsolutePath() + "/web";
-        File indexFile = new File(webDir, "index.html");
-        if (indexFile.exists()) {
-            return "file://" + indexFile.getAbsolutePath();
-        }
-        return null;
-    }
 
     public void initDataDir(String dataDir) {
-        new File(dataDir + "/scripts").mkdirs();
-        new File(dataDir + "/logs").mkdirs();
-        new File(dataDir + "/backups").mkdirs();
-        new File(dataDir + "/deps").mkdirs();
+        try {
+            String result = panel.initDataDir(dataDir);
+            Log.d(TAG, "initDataDir result: " + result);
+        } catch (Exception e) {
+            Log.e(TAG, "initDataDir exception", e);
+        }
     }
 
     public void initWebDir(String webDir) {
-        new File(webDir).mkdirs();
+        // Go 代码会自动处理
     }
 
     public String getVersion() { return "0.0.1"; }

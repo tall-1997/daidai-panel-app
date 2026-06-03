@@ -33,22 +33,6 @@ android {
             debuggable true
         }
     }
-    
-    // 签名配置
-    signingConfigs {
-        release {
-            storeFile file('keystore/daidai-panel.jks')
-            storePassword 'your_store_password'
-            keyAlias 'daidai-panel'
-            keyPassword 'your_key_password'
-        }
-    }
-    
-    buildTypes {
-        release {
-            signingConfig signingConfigs.release
-        }
-    }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
@@ -69,6 +53,13 @@ android {
         merge '**/NOTICE'
         merge '**/NOTICE.txt'
     }
+    
+    // AAR 仓库
+    repositories {
+        flatDir {
+            dirs 'libs'
+        }
+    }
 }
 
 dependencies {
@@ -77,7 +68,10 @@ dependencies {
     implementation 'androidx.webkit:webkit:1.8.0'
     implementation 'com.google.android.material:material:1.10.0'
     
+    // gomobile 生成的 AAR
+    implementation(name: 'mobile', ext: 'aar')
+    
     testImplementation 'junit:junit:4.13.2'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.1'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
 }

@@ -73,8 +73,6 @@ public class MainActivity extends AppCompatActivity {
         settings.setDomStorageEnabled(true);
         settings.setAllowFileAccess(true);
         settings.setAllowContentAccess(true);
-        settings.setAllowFileAccessFromFileURLs(true);
-        settings.setAllowUniversalAccessFromFileURLs(true);
         settings.setSupportZoom(true);
         settings.setBuiltInZoomControls(true);
         settings.setDisplayZoomControls(false);
@@ -201,10 +199,8 @@ public class MainActivity extends AppCompatActivity {
             // 复制前端资源
             copyWebAssetsSync();
             
-            handler.post(() -> {
-                // 直接加载本地 HTML
-                loadLocalPanel();
-            });
+            // 启动面板服务
+            startPanelService();
         }).start();
     }
 
@@ -302,27 +298,77 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * 直接加载本地面板（WebView 模式）
+     * 启动面板服务
      */
-    private void loadLocalPanel() {
+    private void startPanelService() {
+        String dataDir = getFilesDir().getAbsolutePath() + "/Dumb-Panel";
         String webDir = getFilesDir().getAbsolutePath() + "/web";
-        String indexPath = webDir + "/index.html";
-        File indexFile = new File(indexPath);
+        int port = 5701;
         
-        Log.d(TAG, "=== loadLocalPanel ===");
-        Log.d(TAG, "Index file: " + indexPath);
-        Log.d(TAG, "Exists: " + indexFile.exists());
+        Log.d(TAG, "=== startPanelService ===");
+        Log.d(TAG, "Data dir: " + dataDir);
+        Log.d(TAG, "Web dir: " + webDir);
         
-        if (indexFile.exists()) {
-            String url = "file://" + indexPath;
-            Log.d(TAG, "Loading: " + url);
-            showLoading("正在加载面板...");
+        handler.post(() -> showLoading("正在启动面板服务..."));
+        
+        // 初始化目录
+        panelManager.initDataDir(dataDir);
+        
+        // 启动服务器
+        panelManager.startServer(dataDir, webDir, port);
+        
+        // 等待服务器启动
+        waitForServer();
+    }
+
+    /**
+     * 等待服务器启动
+     */
+    private void waitForServer() {
+        Log.d(TAG, "=== waitForServer ===");
+        
+        new Thread(() -> {
+            int maxWait = 60;
+            int waited = 0;
             
-            webView.setVisibility(View.VISIBLE);
-            webView.loadUrl(url);
-        } else {
-            showError("前端资源未找到，请重新安装应用");
-        }
+            while (waited < maxWait) {
+                try {
+                    Thread.sleep(1000);
+                    waited++;
+                    
+                    boolean running = panelManager.isServerRunning();
+                    Log.d(TAG, "Server check: " + running + " (" + waited + "s)");
+                    
+                    if (running) {
+                        Log.d(TAG, "=== Server ready! ===");
+                        handler.post(() -> loadPanel());
+                        return;
+                    }
+                    
+                    final int progress = waited;
+                    handler.post(() -> showLoading("正在启动面板服务... (" + progress + "s)"));
+                } catch (InterruptedException e) {
+                    break;
+                }
+            }
+            
+            Log.e(TAG, "=== Server timeout ===");
+            handler.post(() -> showError("面板服务启动超时，请重启应用"));
+        }).start();
+    }
+
+    /**
+     * 加载面板页面
+     */
+    private void loadPanel() {
+        String url = panelManager.getServerURL();
+        Log.d(TAG, "=== loadPanel ===");
+        Log.d(TAG, "URL: " + url);
+        
+        showLoading("正在加载面板页面...");
+        
+        webView.setVisibility(View.VISIBLE);
+        webView.loadUrl(url);
     }
 
     private void showLoading(String message) {
