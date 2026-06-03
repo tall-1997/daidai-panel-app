@@ -202,14 +202,18 @@ func ensureManagedPythonVenv(syncCreate bool) bool {
 	}
 
 	_ = os.MkdirAll(filepath.Dir(venvDir), 0o755)
+	
+	// 获取正确的 PATH
+	runtimePaths := currentManagedRuntimePaths()
+	
 	var lastErr error
 	for _, candidate := range managedPythonBootstrapCommands() {
-		// v2.2.4 重构 bootstrap 命令表时漏了把 venvDir 拼到 args 末尾，
-		// 导致执行的是 `python3 -m venv`（不带目标路径）必然失败。venv 永远建不出来，
-		// ResolveManagedPipBinary 返回空，自动安装 fallback 到系统 pip3，
-		// Alpine/Debian 上的 PEP 668 把"externally-managed-environment"砸到用户脸上。
 		args := append(append([]string(nil), candidate.args...), venvDir)
 		cmd := exec.Command(candidate.binary, args...)
+		
+		// 设置正确的 PATH 环境变量
+		cmd.Env = append(os.Environ(), "PATH="+runtimePaths.SanitizedPath)
+		
 		out, runErr := cmd.CombinedOutput()
 		if runErr == nil {
 			log.Printf("managed python venv created at %s using %s", venvDir, candidate.binary)

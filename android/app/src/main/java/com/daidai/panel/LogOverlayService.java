@@ -337,8 +337,8 @@ public class LogOverlayService extends Service {
                 String fileName = "daidai-log-" + 
                     new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.getDefault()).format(new Date()) + ".txt";
                 
-                File logDir = new File(Environment.getExternalStoragePublicDirectory(
-                    Environment.DIRECTORY_DOCUMENTS), "DaidaiPanel");
+                // 使用应用私有目录，不需要存储权限
+                File logDir = new File(getFilesDir(), "logs");
                 if (!logDir.exists()) {
                     logDir.mkdirs();
                 }
@@ -349,9 +349,12 @@ public class LogOverlayService extends Service {
                 fos.flush();
                 fos.close();
                 
+                final String filePath = logFile.getAbsolutePath();
+                
                 mainHandler.post(() -> {
-                    Toast.makeText(this, "日志已保存: " + fileName, Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, "日志已保存: " + filePath, Toast.LENGTH_LONG).show();
                     
+                    // 复制到剪贴板
                     ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
                     if (clipboard != null) {
                         ClipData clip = ClipData.newPlainText("daidai-log", logs);
@@ -360,7 +363,7 @@ public class LogOverlayService extends Service {
                     }
                 });
                 
-                Log.d(TAG, "Logs exported: " + logFile.getAbsolutePath());
+                Log.d(TAG, "Logs exported: " + filePath);
                 
             } catch (Exception e) {
                 Log.e(TAG, "Export failed", e);
@@ -470,24 +473,8 @@ public class LogOverlayService extends Service {
         sb.append("系统版本: Android ").append(Build.VERSION.RELEASE).append(" (API ").append(Build.VERSION.SDK_INT).append(")\n");
         sb.append("应用版本: 0.0.1\n\n");
 
-        // logcat
-        sb.append("=== 应用日志 (logcat) ===\n");
-        try {
-            Process process = Runtime.getRuntime().exec("logcat -d -s PanelManager:* MainActivity:* PanelService:*");
-            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-            String line;
-            int lineCount = 0;
-            while ((line = reader.readLine()) != null && lineCount < 1000) {
-                sb.append(line).append("\n");
-                lineCount++;
-            }
-            reader.close();
-        } catch (IOException e) {
-            sb.append("读取失败: ").append(e.getMessage()).append("\n");
-        }
-
         // 面板日志
-        sb.append("\n=== 面板服务日志 ===\n");
+        sb.append("=== 面板服务日志 ===\n");
         File panelLog = new File(getFilesDir(), "Dumb-Panel/panel.log");
         if (panelLog.exists()) {
             try {
