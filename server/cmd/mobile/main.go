@@ -42,6 +42,16 @@ func main() {
 		os.Exit(1)
 	}
 
+	// 注入 PATH 环境变量（关键！解决 Android 进程 PATH 为空的问题）
+	depsDir := filepath.Join(*dataDir, "deps")
+	pythonBinDir := filepath.Join(depsDir, "bin", "python", "bin")
+	nodeBinDir := filepath.Join(depsDir, "bin", "node", "bin")
+	
+	currentPath := os.Getenv("PATH")
+	newPath := pythonBinDir + ":" + nodeBinDir + ":" + depsDir + "/bin:" + currentPath
+	os.Setenv("PATH", newPath)
+	fmt.Fprintf(os.Stderr, "[daidai] PATH 已注入: %s\n", newPath)
+
 	// 确保目录存在
 	if err := os.MkdirAll(*dataDir, 0755); err != nil {
 		fmt.Fprintf(os.Stderr, "[daidai] 创建数据目录失败: %v\n", err)
