@@ -213,30 +213,46 @@ func ensureManagedPythonVenv(syncCreate bool) bool {
 
 	_ = os.MkdirAll(filepath.Dir(venvDir), 0o755)
 	
-	// 获取最新的 PATH（包含可能已安装的运行时）
-	runtimePaths := currentManagedRuntimePaths()
-	log.Printf("[ensureManagedPythonVenv] Using PATH: %s", runtimePaths.SanitizedPath)
+	// 硬编码绝对路径，彻底摆脱 PATH 依赖
+	python3Bin := filepath.Join(dataDir, "deps", "bin", "python", "bin", "python3.12")
+	pythonBin := filepath.Join(dataDir, "deps", "bin", "python", "bin", "python")
+	python3Link := filepath.Join(dataDir, "deps", "bin", "python", "bin", "python3")
+	
+	log.Printf("[ensureManagedPythonVenv] Creating venv at: %s", venvDir)
+	log.Printf("[ensureManagedPythonVenv] python3.12: %s (exists: %v)", python3Bin, fileExists(python3Bin))
+	log.Printf("[ensureManagedPythonVenv] python: %s (exists: %v)", pythonBin, fileExists(pythonBin))
+	log.Printf("[ensureManagedPythonVenv] python3: %s (exists: %v)", python3Link, fileExists(python3Link))
+	
+	// 尝试的顺序：python3.12 -> python3 -> python
+	pythonCandidates := []string{python3Bin, python3Link, pythonBin}
 	
 	var lastErr error
-	for _, candidate := range managedPythonBootstrapCommands() {
-		args := append(append([]string(nil), candidate.args...), venvDir)
-		cmd := exec.Command(candidate.binary, args...)
+	for _, pythonPath := range pythonCandidates {
+		if !fileExists(pythonPath) {
+			log.Printf("[ensureManagedPythonVenv] Skip %s (not exists)", pythonPath)
+			continue
+		}
 		
-		// 设置正确的 PATH 环境变量
-		cmd.Env = append(os.Environ(), "PATH="+runtimePaths.SanitizedPath)
-		
+		log.Printf("[ensureManagedPythonVenv] Trying: %s -m venv %s", pythonPath, venvDir)
+		cmd := exec.Command(pythonPath, "-m", "venv", venvDir)
 		out, runErr := cmd.CombinedOutput()
 		if runErr == nil {
-			log.Printf("managed python venv created at %s using %s", venvDir, candidate.binary)
+			log.Printf("[ensureManagedPythonVenv] Venv created successfully with %s", pythonPath)
 			return true
 		}
-		lastErr = fmt.Errorf("%s %v failed: %v: %s", candidate.binary, args, runErr, strings.TrimSpace(string(out)))
-		log.Printf("[ensureManagedPythonVenv] %s failed: %v", candidate.binary, lastErr)
+		lastErr = fmt.Errorf("%s -m venv failed: %v: %s", pythonPath, runErr, strings.TrimSpace(string(out)))
+		log.Printf("[ensureManagedPythonVenv] %s failed: %v", pythonPath, lastErr)
 	}
+	
 	if lastErr != nil {
 		log.Printf("warn: managed python venv create failed: %v (auto-install will fall back to system pip with --break-system-packages)", lastErr)
 	}
 	return false
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 func EnsureManagedPythonVenv() bool {

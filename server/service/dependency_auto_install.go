@@ -208,19 +208,29 @@ func ResolvePipInstallCommand() (binary string, extraFlags []string, usingSystem
 		return binary, nil, false
 	}
 	
-	// 检查 Android 运行时目录
+	// 硬编码绝对路径，彻底摆脱 PATH 依赖
 	if config.C != nil {
 		dataDir := config.C.Data.Dir
 		if dataDir != "" {
-			androidPipPaths := []string{
-				filepath.Join(dataDir, "deps", "bin", "python", "bin", "pip3"),
-				filepath.Join(dataDir, "deps", "bin", "python", "bin", "pip"),
+			// 优先使用 pip3.12 绝对路径
+			pip312 := filepath.Join(dataDir, "deps", "bin", "python", "bin", "pip3.12")
+			if _, err := os.Stat(pip312); err == nil {
+				log.Printf("[ResolvePipInstallCommand] Using pip3.12: %s", pip312)
+				return pip312, nil, false
 			}
-			for _, pipPath := range androidPipPaths {
-				if _, err := os.Stat(pipPath); err == nil {
-					log.Printf("[ResolvePipInstallCommand] Found Android pip: %s", pipPath)
-					return pipPath, nil, false
-				}
+			
+			// 降级使用 pip3
+			pip3 := filepath.Join(dataDir, "deps", "bin", "python", "bin", "pip3")
+			if _, err := os.Stat(pip3); err == nil {
+				log.Printf("[ResolvePipInstallCommand] Using pip3: %s", pip3)
+				return pip3, nil, false
+			}
+			
+			// 降级使用 pip
+			pip := filepath.Join(dataDir, "deps", "bin", "python", "bin", "pip")
+			if _, err := os.Stat(pip); err == nil {
+				log.Printf("[ResolvePipInstallCommand] Using pip: %s", pip)
+				return pip, nil, false
 			}
 		}
 	}
