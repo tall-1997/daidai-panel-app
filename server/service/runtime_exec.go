@@ -271,6 +271,24 @@ func ResolveManagedPipBinary() string {
 			return binary
 		}
 	}
+	
+	// 检查 Android 运行时目录
+	if config.C != nil {
+		dataDir := config.C.Data.Dir
+		if dataDir != "" {
+			androidPipPaths := []string{
+				filepath.Join(dataDir, "deps", "bin", "python", "bin", "pip3"),
+				filepath.Join(dataDir, "deps", "bin", "python", "bin", "pip"),
+			}
+			for _, pipPath := range androidPipPaths {
+				if _, err := os.Stat(pipPath); err == nil {
+					log.Printf("[ResolveManagedPipBinary] Found Android pip: %s", pipPath)
+					return pipPath
+				}
+			}
+		}
+	}
+	
 	return ""
 }
 
