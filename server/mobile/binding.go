@@ -9,6 +9,8 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+
+	"daidai-panel/service"
 )
 
 // DaidaiPanel is the main entry point for mobile platforms
@@ -117,8 +119,11 @@ func (p *DaidaiPanel) GetVersion() string {
 // SetAlpineReady marks the Alpine environment as ready
 func (p *DaidaiPanel) SetAlpineReady(dataDir string) string {
 	log.Printf("[DaidaiPanel] SetAlpineReady called with dataDir: %s", dataDir)
-	// ProotManager 会在 mobile.go 的 Start 方法中被初始化
-	// 这里只是标记状态
+	
+	// 设置 ProotManager 为已初始化
+	prootMgr := service.GetProotManager()
+	prootMgr.SetInitialized(dataDir)
+	
 	return `{"success":true}`
 }
 

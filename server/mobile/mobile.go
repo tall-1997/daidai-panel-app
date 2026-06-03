@@ -123,12 +123,14 @@ func (s *MobileServer) Start(dataDir, webDir string, port int) error {
 	service.WarmManagedPythonVenv()
 	
 	// Initialize Alpine + proot environment
+	// 注意：Java 代码会先解压文件，然后调用 SetAlpineReady
+	// 这里只是检查是否已经初始化
 	prootMgr := service.GetProotManager()
-	// 尝试初始化，如果失败则等待 Java 代码完成
-	if err := prootMgr.InitAlpineRootfs(cfg.Data.Dir); err != nil {
-		log.Printf("[Mobile] Alpine rootfs not ready yet: %v", err)
+	if prootMgr.IsInitialized() {
+		log.Printf("[Mobile] Alpine rootfs already initialized")
 	} else {
-		log.Printf("[Mobile] Alpine rootfs initialized successfully")
+		log.Printf("[Mobile] Alpine rootfs not ready, waiting for Java...")
+		// 不返回错误，继续启动服务
 	}
 
 	service.InitSchedulerV2()
