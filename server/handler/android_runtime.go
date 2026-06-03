@@ -330,21 +330,76 @@ func (h *AndroidRuntimeHandler) Install(c *gin.Context) {
 		return
 	}
 
-	client := &http.Client{Timeout: 30 * time.Minute}
-	resp, err := client.Get(req.URL)
+	// 下载到临时文件（支持重试）
+	tmpFile := filepath.Join(androidBinDir, req.Name+".tar.gz")
+	maxRetries := 3
+	var downloadSuccess bool
+	
+	for retry := 0; retry < maxRetries; retry++ {
+		if retry > 0 {
+			emit(fmt.Sprintf("下载重试 (%d/%d)...", retry+1, maxRetries))
+			time.Sleep(2 * time.Second)
+		}
+		
+		emit(fmt.Sprintf("开始下载... (尝试 %d/%d)", retry+1, maxRetries))
+		
+		client := &http.Client{Timeout: 30 * time.Minute}
+		resp, err := client.Get(req.URL)
+		if err != nil {
+			emit("❌ 下载失败: " + err.Error())
+			log.Printf("[AndroidRuntime] Download failed (attempt %d): %v", retry+1, err)
+			continue
+		}
+		
+		if resp.StatusCode != http.StatusOK {
+			emit(fmt.Sprintf("❌ HTTP %d", resp.StatusCode))
+			resp.Body.Close()
+			continue
+		}
+		
+		emit(fmt.Sprintf("连接成功，Content-Length=%d", resp.ContentLength))
+		
+		// 下载到临时文件
+		outFile, err := os.Create(tmpFile)
+		if err != nil {
+			emit("❌ 创建临时文件失败: " + err.Error())
+			resp.Body.Close()
+			continue
+		}
+		
+		written, err := io.Copy(outFile, resp.Body)
+		outFile.Close()
+		resp.Body.Close()
+		
+		if err != nil {
+			emit(fmt.Sprintf("❌ 下载中断: %v (已下载 %d bytes)", err, written))
+			log.Printf("[AndroidRuntime] Download interrupted (attempt %d): %v, written: %d", retry+1, err, written)
+			os.Remove(tmpFile)
+			continue
+		}
+		
+		emit(fmt.Sprintf("下载完成: %d bytes", written))
+		downloadSuccess = true
+		break
+	}
+	
+	if !downloadSuccess {
+		emit("❌ 下载失败，已重试 " + fmt.Sprintf("%d", maxRetries) + " 次")
+		os.Remove(tmpFile)
+		return
+	}
+	defer os.Remove(tmpFile)
+	
+	// 解压
+	emit("开始解压...")
+	tmpFileReader, err := os.Open(tmpFile)
 	if err != nil {
-		emit("❌ 下载失败: " + err.Error())
+		emit("❌ 打开临时文件失败: " + err.Error())
 		return
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		emit(fmt.Sprintf("❌ HTTP %d", resp.StatusCode))
-		return
-	}
-
-	emit(fmt.Sprintf("连接成功，Content-Length=%d", resp.ContentLength))
-
-	gzr, err := gzip.NewReader(resp.Body)
+	defer tmpFileReader.Close()
+	
+	gzr, err := gzip.NewReader(tmpFileReader)
 	if err != nil {
 		emit("❌ 解压 gzip 失败: " + err.Error())
 		return
