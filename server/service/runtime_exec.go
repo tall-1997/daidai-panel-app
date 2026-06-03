@@ -203,8 +203,9 @@ func ensureManagedPythonVenv(syncCreate bool) bool {
 
 	_ = os.MkdirAll(filepath.Dir(venvDir), 0o755)
 	
-	// 获取正确的 PATH
+	// 获取最新的 PATH（包含可能已安装的运行时）
 	runtimePaths := currentManagedRuntimePaths()
+	log.Printf("[ensureManagedPythonVenv] Using PATH: %s", runtimePaths.SanitizedPath)
 	
 	var lastErr error
 	for _, candidate := range managedPythonBootstrapCommands() {
@@ -220,6 +221,7 @@ func ensureManagedPythonVenv(syncCreate bool) bool {
 			return true
 		}
 		lastErr = fmt.Errorf("%s %v failed: %v: %s", candidate.binary, args, runErr, strings.TrimSpace(string(out)))
+		log.Printf("[ensureManagedPythonVenv] %s failed: %v", candidate.binary, lastErr)
 	}
 	if lastErr != nil {
 		log.Printf("warn: managed python venv create failed: %v (auto-install will fall back to system pip with --break-system-packages)", lastErr)

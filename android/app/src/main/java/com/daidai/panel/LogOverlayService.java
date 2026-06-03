@@ -329,10 +329,12 @@ public class LogOverlayService extends Service {
     private void exportLogs() {
         hideMenu();
         Toast.makeText(this, "正在导出日志...", Toast.LENGTH_SHORT).show();
+        Log.d(TAG, "exportLogs started");
         
         executor.execute(() -> {
             try {
                 String logs = collectLogs();
+                Log.d(TAG, "Logs collected, length: " + logs.length());
                 
                 String fileName = "daidai-log-" + 
                     new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.getDefault()).format(new Date()) + ".txt";
@@ -350,9 +352,10 @@ public class LogOverlayService extends Service {
                 fos.close();
                 
                 final String filePath = logFile.getAbsolutePath();
+                Log.d(TAG, "Logs saved to: " + filePath);
                 
                 mainHandler.post(() -> {
-                    Toast.makeText(this, "日志已保存: " + filePath, Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, "日志已保存到: " + filePath, Toast.LENGTH_LONG).show();
                     
                     // 复制到剪贴板
                     ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
@@ -362,8 +365,6 @@ public class LogOverlayService extends Service {
                         Toast.makeText(this, "已复制到剪贴板", Toast.LENGTH_SHORT).show();
                     }
                 });
-                
-                Log.d(TAG, "Logs exported: " + filePath);
                 
             } catch (Exception e) {
                 Log.e(TAG, "Export failed", e);
