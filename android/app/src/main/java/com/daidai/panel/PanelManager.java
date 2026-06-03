@@ -14,9 +14,6 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/**
- * 面板管理器 - 负责管理Go后端服务
- */
 public class PanelManager {
     private static final String TAG = "PanelManager";
     private static volatile PanelManager instance;
@@ -24,7 +21,6 @@ public class PanelManager {
     private final Context context;
     private Process serverProcess;
     private volatile boolean isRunning = false;
-    private volatile boolean processStarted = false;
     private int port = 5701;
     private final AtomicBoolean serverStarted = new AtomicBoolean(false);
 
@@ -43,68 +39,54 @@ public class PanelManager {
         this.context = context;
     }
 
-    /**
-     * 启动面板服务器
-     */
     public synchronized void startServer(String dataDir, String webDir, int port) {
         if (serverStarted.get()) {
-            Log.w(TAG, "Server already started, skipping");
+            Log.w(TAG, "Server already started");
             return;
         }
         serverStarted.set(true);
         
         this.port = port;
         Log.d(TAG, "========================================");
-        Log.d(TAG, "startServer - 开始启动服务");
-        Log.d(TAG, "Data dir: " + dataDir);
-        Log.d(TAG, "Web dir: " + webDir);
+        Log.d(TAG, "startServer");
+        Log.d(TAG, "Data: " + dataDir);
+        Log.d(TAG, "Web: " + webDir);
         Log.d(TAG, "Port: " + port);
 
-        // 创建目录
         new File(dataDir).mkdirs();
         new File(webDir).mkdirs();
         initDataDir(dataDir);
 
-        // 复制二进制文件
-        String binaryPath = copyBinaryToExecutableLocation();
+        // 复制二进制到 nativeLibraryDir（有执行权限）
+        String binaryPath = copyBinaryToLibDir();
         if (binaryPath == null) {
-            Log.e(TAG, "ERROR: 复制二进制文件失败");
+            Log.e(TAG, "Failed to copy binary");
             return;
         }
         
         File binaryFile = new File(binaryPath);
-        Log.d(TAG, "Binary path: " + binaryPath);
-        Log.d(TAG, "Binary exists: " + binaryFile.exists());
-        Log.d(TAG, "Binary size: " + binaryFile.length());
+        Log.d(TAG, "Binary: " + binaryPath);
+        Log.d(TAG, "Exists: " + binaryFile.exists());
+        Log.d(TAG, "Size: " + binaryFile.length());
+        Log.d(TAG, "Can execute: " + binaryFile.canExecute());
 
-        // 检查 web 目录
-        File webDirFile = new File(webDir);
-        File indexFile = new File(webDir, "index.html");
-        Log.d(TAG, "Web dir exists: " + webDirFile.exists());
-        Log.d(TAG, "index.html exists: " + indexFile.exists());
-
-        // 启动子进程
         try {
-            // 使用 sh -c 方式执行，绕过权限限制
-            Log.d(TAG, "Starting process with sh -c...");
-            
+            // 直接执行二进制文件
             ProcessBuilder pb = new ProcessBuilder(
-                "sh", "-c",
-                "chmod 755 " + binaryPath + " && " + binaryPath + 
-                " -data-dir " + dataDir + 
-                " -web-dir " + webDir + 
-                " -port " + port
+                binaryPath,
+                "-data-dir", dataDir,
+                "-web-dir", webDir,
+                "-port", String.valueOf(port)
             );
             
             pb.directory(new File(dataDir));
             pb.redirectErrorStream(true);
             
-            Log.d(TAG, "Executing: sh -c 'chmod 755 " + binaryPath + " && ...'");
+            Log.d(TAG, "Starting process...");
             serverProcess = pb.start();
-            processStarted = true;
-            Log.d(TAG, "Process started successfully");
+            Log.d(TAG, "Process started!");
 
-            // 读取进程输出
+            // 读取输出
             Thread outputThread = new Thread(() -> {
                 try {
                     BufferedReader reader = new BufferedReader(
@@ -114,62 +96,138 @@ public class PanelManager {
                         Log.i(TAG, "[Server] " + line);
                     }
                 } catch (IOException e) {
-                    Log.e(TAG, "Error reading output", e);
+                    Log.e(TAG, "Read error", e);
                 }
-                Log.d(TAG, "Output stream ended");
-            }, "OutputReader");
+                Log.d(TAG, "Output ended");
+            });
             outputThread.setDaemon(true);
             outputThread.start();
 
-            // HTTP 轮询检测
+            // HTTP 轮询
             Thread pollThread = new Thread(() -> {
-                Log.d(TAG, "Starting HTTP poll...");
-                
+                Log.d(TAG, "HTTP poll started");
                 for (int i = 1; i <= 60; i++) {
                     try {
                         Thread.sleep(1000);
                         
-                        // 检查进程是否还活着
                         try {
                             int exitCode = serverProcess.exitValue();
-                            Log.e(TAG, "Process exited with code: " + exitCode);
+                            Log.e(TAG, "Process exited: " + exitCode);
                             isRunning = false;
                             return;
                         } catch (IllegalThreadStateException e) {
-                            // 进程还在运行
+                            // still running
                         }
                         
-                        // 检查 HTTP
                         if (checkHttpPort()) {
                             isRunning = true;
                             Log.d(TAG, "========================================");
-                            Log.d(TAG, "Server is READY! (after " + i + "s)");
+                            Log.d(TAG, "Server READY! (" + i + "s)");
                             Log.d(TAG, "========================================");
                             return;
                         }
                         
-                        if (i % 5 == 0) {
-                            Log.d(TAG, "Waiting... " + i + "s");
-                        }
+                        if (i % 5 == 0) Log.d(TAG, "Waiting... " + i + "s");
                     } catch (InterruptedException e) {
                         return;
                     }
                 }
-                
-                Log.e(TAG, "TIMEOUT: 服务启动超时 (60s)");
-            }, "HttpPoller");
+                Log.e(TAG, "TIMEOUT (60s)");
+            });
             pollThread.setDaemon(true);
             pollThread.start();
             
         } catch (IOException e) {
-            Log.e(TAG, "Failed to start process", e);
-            e.printStackTrace();
+            Log.e(TAG, "Start failed", e);
         }
     }
 
     /**
-     * 停止服务
+     * 复制二进制到 nativeLibraryDir（有 SELinux 执行权限）
      */
+    private String copyBinaryToLibDir() {
+        String arch = getArch();
+        String assetPath = "bin/daidai-server-" + arch;
+        
+        // 使用 nativeLibraryDir，这个目录有执行权限
+        String libDir = context.getApplicationInfo().nativeLibraryDir;
+        String targetPath = libDir + "/libdaidai.so";
+        
+        File targetFile = new File(targetPath);
+        
+        // 如果已存在且大小正确，直接返回
+        if (targetFile.exists() && targetFile.length() > 1000000) {
+            Log.d(TAG, "Binary exists in lib dir: " + targetPath);
+            return targetPath;
+        }
+        
+        // 从 assets 复制
+        InputStream in = null;
+        OutputStream out = null;
+        try {
+            Log.d(TAG, "Copying to lib dir: " + targetPath);
+            in = context.getAssets().open(assetPath);
+            out = new FileOutputStream(targetFile);
+            
+            byte[] buffer = new byte[8192];
+            int read;
+            long total = 0;
+            while ((read = in.read(buffer)) != -1) {
+                out.write(buffer, 0, read);
+                total += read;
+            }
+            out.flush();
+            
+            Log.d(TAG, "Copied: " + total + " bytes");
+            
+            // 设置权限
+            targetFile.setExecutable(true, false);
+            targetFile.setReadable(true, false);
+            
+            return targetPath;
+        } catch (IOException e) {
+            Log.e(TAG, "Copy failed", e);
+            
+            // 备用方案：使用 filesDir + Runtime.exec
+            return copyToFilesDir(assetPath);
+        } finally {
+            try { if (in != null) in.close(); } catch (IOException ignored) {}
+            try { if (out != null) out.close(); } catch (IOException ignored) {}
+        }
+    }
+    
+    /**
+     * 备用方案：复制到 filesDir
+     */
+    private String copyToFilesDir(String assetPath) {
+        String targetPath = context.getFilesDir().getAbsolutePath() + "/bin/daidai-server";
+        File targetFile = new File(targetPath);
+        targetFile.getParentFile().mkdirs();
+        
+        InputStream in = null;
+        OutputStream out = null;
+        try {
+            in = context.getAssets().open(assetPath);
+            out = new FileOutputStream(targetFile);
+            
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                out.write(buffer, 0, read);
+            }
+            out.flush();
+            
+            targetFile.setExecutable(true, false);
+            return targetPath;
+        } catch (IOException e) {
+            Log.e(TAG, "Fallback copy failed", e);
+            return null;
+        } finally {
+            try { if (in != null) in.close(); } catch (IOException ignored) {}
+            try { if (out != null) out.close(); } catch (IOException ignored) {}
+        }
+    }
+
     public void stopServer() {
         Log.d(TAG, "stopServer");
         if (serverProcess != null) {
@@ -182,40 +240,24 @@ public class PanelManager {
             serverProcess = null;
         }
         isRunning = false;
-        processStarted = false;
         serverStarted.set(false);
     }
 
-    /**
-     * 检查服务是否运行中
-     */
     public boolean isServerRunning() {
-        if (serverProcess == null) {
-            return false;
-        }
-
-        // 检查进程状态
+        if (serverProcess == null) return false;
+        
         try {
             int exitCode = serverProcess.exitValue();
-            Log.w(TAG, "Process exited with code: " + exitCode);
+            Log.w(TAG, "Process exited: " + exitCode);
             isRunning = false;
             return false;
         } catch (IllegalThreadStateException e) {
-            // 进程还在运行
+            // still running
         }
-
-        // 如果已经确认运行中，直接返回
-        if (isRunning) {
-            return true;
-        }
-
-        // 尝试 HTTP 检测
-        return checkHttpPort();
+        
+        return isRunning || checkHttpPort();
     }
 
-    /**
-     * HTTP 端口检测
-     */
     private boolean checkHttpPort() {
         HttpURLConnection conn = null;
         try {
@@ -225,30 +267,17 @@ public class PanelManager {
             conn.setReadTimeout(2000);
             conn.setRequestMethod("GET");
             conn.setUseCaches(false);
-            conn.setInstanceFollowRedirects(false);
             int code = conn.getResponseCode();
-            Log.d(TAG, "HTTP check: port=" + port + " code=" + code);
             return code > 0;
         } catch (Exception e) {
             return false;
         } finally {
-            if (conn != null) {
-                conn.disconnect();
-            }
+            if (conn != null) conn.disconnect();
         }
     }
 
-    public int getServerPort() {
-        return port;
-    }
-
-    public String getServerURL() {
-        return "http://127.0.0.1:" + port;
-    }
-
-    public boolean isProcessStarted() {
-        return processStarted;
-    }
+    public int getServerPort() { return port; }
+    public String getServerURL() { return "http://127.0.0.1:" + port; }
 
     public void initDataDir(String dataDir) {
         new File(dataDir + "/scripts").mkdirs();
@@ -261,63 +290,12 @@ public class PanelManager {
         new File(webDir).mkdirs();
     }
 
-    public String getVersion() {
-        return "0.0.1";
-    }
-
-    private String copyBinaryToExecutableLocation() {
-        String arch = getArch();
-        String assetPath = "bin/daidai-server-" + arch;
-        String targetPath = context.getFilesDir().getAbsolutePath() + "/bin/daidai-server";
-
-        File targetFile = new File(targetPath);
-        File targetDir = targetFile.getParentFile();
-
-        if (!targetDir.exists()) {
-            targetDir.mkdirs();
-        }
-
-        // 如果已存在且大小正确，直接返回
-        if (targetFile.exists() && targetFile.length() > 1000000) {
-            Log.d(TAG, "Binary already exists: " + targetPath + " (" + targetFile.length() + " bytes)");
-            return targetPath;
-        }
-
-        // 从 assets 复制
-        InputStream in = null;
-        OutputStream out = null;
-        try {
-            Log.d(TAG, "Copying binary from: " + assetPath);
-            in = context.getAssets().open(assetPath);
-            out = new FileOutputStream(targetFile);
-
-            byte[] buffer = new byte[8192];
-            int read;
-            long total = 0;
-            while ((read = in.read(buffer)) != -1) {
-                out.write(buffer, 0, read);
-                total += read;
-            }
-            out.flush();
-
-            Log.d(TAG, "Binary copied: " + total + " bytes");
-            return targetPath;
-        } catch (IOException e) {
-            Log.e(TAG, "Failed to copy binary", e);
-            return null;
-        } finally {
-            try { if (in != null) in.close(); } catch (IOException ignored) {}
-            try { if (out != null) out.close(); } catch (IOException ignored) {}
-        }
-    }
+    public String getVersion() { return "0.0.1"; }
 
     private String getArch() {
         String arch = android.os.Build.SUPPORTED_ABIS[0];
-        if (arch.contains("arm64")) {
-            return "arm64";
-        } else if (arch.contains("arm")) {
-            return "armv7";
-        }
+        if (arch.contains("arm64")) return "arm64";
+        if (arch.contains("arm")) return "armv7";
         return "arm64";
     }
 }

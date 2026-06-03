@@ -9,8 +9,10 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
 import android.graphics.PixelFormat;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
 import android.os.Handler;
@@ -18,7 +20,6 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.util.Log;
 import android.view.Gravity;
-import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
@@ -39,13 +40,11 @@ import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/**
- * 日志悬浮按钮服务
- */
 public class LogOverlayService extends Service {
     private static final String TAG = "LogOverlayService";
     private static final String CHANNEL_ID = "log_overlay_channel";
     private static final int NOTIFICATION_ID = 2;
+    private static final int BUTTON_SIZE = 48; // dp
     
     private WindowManager windowManager;
     private View overlayView;
@@ -120,7 +119,6 @@ public class LogOverlayService extends Service {
     }
 
     private void createOverlayButton() {
-        // 设置悬浮窗口参数
         int layoutType;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             layoutType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
@@ -128,26 +126,48 @@ public class LogOverlayService extends Service {
             layoutType = WindowManager.LayoutParams.TYPE_PHONE;
         }
 
+        // 转换 dp 为像素
+        int sizePx = (int) (BUTTON_SIZE * getResources().getDisplayMetrics().density);
+
         params = new WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            sizePx,
+            sizePx,
             layoutType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         );
         
         params.gravity = Gravity.TOP | Gravity.START;
-        params.x = 0;
-        params.y = 200;
+        params.x = 16;
+        params.y = 100;
 
-        // 创建悬浮按钮视图
-        overlayView = new View(this);
-        overlayView.setBackgroundResource(android.R.drawable.ic_dialog_info);
-        overlayView.setAlpha(0.8f);
-        overlayView.setScaleX(0.7f);
-        overlayView.setScaleY(0.7f);
+        // 创建自定义圆形按钮
+        overlayView = new View(this) {
+            private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            
+            @Override
+            protected void onDraw(Canvas canvas) {
+                super.onDraw(canvas);
+                float centerX = getWidth() / 2f;
+                float centerY = getHeight() / 2f;
+                float radius = Math.min(centerX, centerY) - 2;
+                
+                // 绘制圆形背景
+                paint.setColor(Color.parseColor("#667eea"));
+                paint.setStyle(Paint.Style.FILL);
+                canvas.drawCircle(centerX, centerY, radius, paint);
+                
+                // 绘制白色 "L" 字母
+                paint.setColor(Color.WHITE);
+                paint.setTextSize(radius * 1.2f);
+                paint.setTextAlign(Paint.Align.CENTER);
+                Paint.FontMetrics fm = paint.getFontMetrics();
+                float textY = centerY - (fm.ascent + fm.descent) / 2;
+                canvas.drawText("L", centerX, textY, paint);
+            }
+        };
 
-        // 设置触摸事件 - 拖动和点击
+        // 设置触摸事件
         overlayView.setOnTouchListener(new View.OnTouchListener() {
             private int initialX, initialY;
             private float initialTouchX, initialTouchY;
@@ -166,7 +186,7 @@ public class LogOverlayService extends Service {
                     case MotionEvent.ACTION_MOVE:
                         float dx = event.getRawX() - initialTouchX;
                         float dy = event.getRawY() - initialTouchY;
-                        if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+                        if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
                             isMoved = true;
                             params.x = initialX + (int) dx;
                             params.y = initialY + (int) dy;
@@ -175,7 +195,6 @@ public class LogOverlayService extends Service {
                         return true;
                     case MotionEvent.ACTION_UP:
                         if (!isMoved) {
-                            // 点击事件 - 导出日志
                             exportLogs();
                         }
                         return true;
@@ -186,7 +205,7 @@ public class LogOverlayService extends Service {
 
         try {
             windowManager.addView(overlayView, params);
-            Log.d(TAG, "Overlay button created");
+            Log.d(TAG, "Overlay created");
         } catch (Exception e) {
             Log.e(TAG, "Failed to create overlay", e);
         }
@@ -197,10 +216,8 @@ public class LogOverlayService extends Service {
         
         executor.execute(() -> {
             try {
-                // 收集日志
                 String logs = collectLogs();
                 
-                // 保存到文件
                 String fileName = "daidai-log-" + 
                     new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.getDefault()).format(new Date()) + ".txt";
                 
@@ -217,23 +234,22 @@ public class LogOverlayService extends Service {
                 fos.close();
                 
                 mainHandler.post(() -> {
-                    Toast.makeText(this, "日志已保存到: " + logFile.getAbsolutePath(), Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, "日志已保存: " + fileName, Toast.LENGTH_LONG).show();
                     
-                    // 复制到剪贴板
                     ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
                     if (clipboard != null) {
                         ClipData clip = ClipData.newPlainText("daidai-log", logs);
                         clipboard.setPrimaryClip(clip);
-                        Toast.makeText(this, "日志已复制到剪贴板", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, "已复制到剪贴板", Toast.LENGTH_SHORT).show();
                     }
                 });
                 
-                Log.d(TAG, "Logs exported to: " + logFile.getAbsolutePath());
+                Log.d(TAG, "Logs exported: " + logFile.getAbsolutePath());
                 
             } catch (Exception e) {
-                Log.e(TAG, "Failed to export logs", e);
+                Log.e(TAG, "Export failed", e);
                 mainHandler.post(() -> {
-                    Toast.makeText(this, "导出日志失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, "导出失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
                 });
             }
         });
@@ -249,7 +265,7 @@ public class LogOverlayService extends Service {
         sb.append("系统版本: Android ").append(Build.VERSION.RELEASE).append(" (API ").append(Build.VERSION.SDK_INT).append(")\n");
         sb.append("应用版本: 0.0.1\n\n");
 
-        // 读取 logcat 日志
+        // logcat
         sb.append("=== 应用日志 (logcat) ===\n");
         try {
             Process process = Runtime.getRuntime().exec("logcat -d -s PanelManager:* MainActivity:* PanelService:*");
@@ -262,10 +278,10 @@ public class LogOverlayService extends Service {
             }
             reader.close();
         } catch (IOException e) {
-            sb.append("读取 logcat 失败: ").append(e.getMessage()).append("\n");
+            sb.append("读取失败: ").append(e.getMessage()).append("\n");
         }
 
-        // 读取面板日志文件
+        // 面板日志
         sb.append("\n=== 面板服务日志 ===\n");
         File panelLog = new File(getFilesDir(), "Dumb-Panel/panel.log");
         if (panelLog.exists()) {
@@ -279,36 +295,33 @@ public class LogOverlayService extends Service {
                 }
                 reader.close();
             } catch (IOException e) {
-                sb.append("读取面板日志失败: ").append(e.getMessage()).append("\n");
+                sb.append("读取失败: ").append(e.getMessage()).append("\n");
             }
         } else {
-            sb.append("面板日志文件不存在\n");
+            sb.append("日志文件不存在\n");
         }
 
-        // 检查关键文件
+        // 文件检查
         sb.append("\n=== 文件检查 ===\n");
         File webDir = new File(getFilesDir(), "web");
         File indexFile = new File(webDir, "index.html");
-        File binDir = new File(getFilesDir(), "bin");
-        File binary = new File(binDir, "daidai-server");
+        File libDir = new File(getApplicationInfo().nativeLibraryDir);
+        File binary = new File(libDir, "libdaidai.so");
         
-        sb.append("Web目录存在: ").append(webDir.exists()).append("\n");
-        sb.append("index.html存在: ").append(indexFile.exists()).append("\n");
-        sb.append("Bin目录存在: ").append(binDir.exists()).append("\n");
-        sb.append("二进制文件存在: ").append(binary.exists()).append("\n");
+        sb.append("Web目录: ").append(webDir.exists()).append("\n");
+        sb.append("index.html: ").append(indexFile.exists()).append("\n");
+        sb.append("Lib目录: ").append(libDir.exists()).append("\n");
+        sb.append("二进制(lib): ").append(binary.exists()).append("\n");
         if (binary.exists()) {
-            sb.append("二进制文件大小: ").append(binary.length()).append(" bytes\n");
-            sb.append("二进制可执行: ").append(binary.canExecute()).append("\n");
+            sb.append("二进制大小: ").append(binary.length()).append("\n");
+            sb.append("可执行: ").append(binary.canExecute()).append("\n");
         }
         
-        // 检查数据目录
         File dataDir = new File(getFilesDir(), "Dumb-Panel");
-        sb.append("数据目录存在: ").append(dataDir.exists()).append("\n");
+        sb.append("数据目录: ").append(dataDir.exists()).append("\n");
         if (dataDir.exists()) {
-            File configFile = new File(dataDir, "config.yaml");
-            sb.append("配置文件存在: ").append(configFile.exists()).append("\n");
-            File dbFile = new File(dataDir, "daidai.db");
-            sb.append("数据库存在: ").append(dbFile.exists()).append("\n");
+            sb.append("config.yaml: ").append(new File(dataDir, "config.yaml").exists()).append("\n");
+            sb.append("daidai.db: ").append(new File(dataDir, "daidai.db").exists()).append("\n");
         }
 
         return sb.toString();
