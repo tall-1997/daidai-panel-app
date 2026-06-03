@@ -73,83 +73,20 @@ public class MainActivity extends AppCompatActivity {
             try {
                 String dataDir = getFilesDir().getAbsolutePath() + "/Dumb-Panel";
                 
-                // 解压 Alpine rootfs
-                File alpineDir = new File(dataDir, "alpine");
-                File alpineBin = new File(alpineDir, "bin/sh");
+                // 检查 Alpine 是否已初始化（由 SplashActivity 完成）
+                File alpineBin = new File(dataDir, "alpine/bin/sh");
+                File proot = new File(dataDir, "proot");
                 
-                if (!alpineBin.exists()) {
-                    Log.d(TAG, "Extracting Alpine rootfs from assets...");
-                    alpineDir.mkdirs();
-                    
-                    // 从 assets 解压
-                    InputStream in = getAssets().open("alpine/alpine-rootfs.tar.gz");
-                    // 保存到临时文件
-                    File tmpFile = new File(dataDir, "alpine-rootfs.tar.gz");
-                    FileOutputStream fos = new FileOutputStream(tmpFile);
-                    byte[] buffer = new byte[4096];
-                    int read;
-                    while ((read = in.read(buffer)) != -1) {
-                        fos.write(buffer, 0, read);
-                    }
-                    fos.flush();
-                    fos.close();
-                    in.close();
-                    
-                    // 解压
-                    ProcessBuilder pb = new ProcessBuilder("tar", "xzf", 
-                        tmpFile.getAbsolutePath(), "-C", alpineDir.getAbsolutePath());
-                    Process process = pb.start();
-                    int exitCode = process.waitFor();
-                    Log.d(TAG, "Alpine rootfs extract exit code: " + exitCode);
-                    
-                    // 删除临时文件
-                    tmpFile.delete();
-                    
-                    // 验证
-                    if (alpineBin.exists()) {
-                        Log.d(TAG, "Alpine rootfs extracted successfully");
-                    } else {
-                        Log.e(TAG, "Alpine rootfs extraction failed");
-                    }
+                if (alpineBin.exists() && proot.exists()) {
+                    Log.d(TAG, "Alpine environment already initialized by SplashActivity");
+                    // 通知 Go 代码
+                    PanelManager.getInstance(this).setAlpineReady(dataDir);
                 } else {
-                    Log.d(TAG, "Alpine rootfs already exists");
+                    Log.w(TAG, "Alpine environment not initialized");
                 }
-                
-                // 复制 proot
-                File prootDst = new File(dataDir, "proot");
-                if (!prootDst.exists()) {
-                    Log.d(TAG, "Copying proot from assets...");
-                    InputStream in = getAssets().open("alpine/proot");
-                    FileOutputStream fos = new FileOutputStream(prootDst);
-                    byte[] buffer = new byte[4096];
-                    int read;
-                    while ((read = in.read(buffer)) != -1) {
-                        fos.write(buffer, 0, read);
-                    }
-                    fos.flush();
-                    fos.close();
-                    in.close();
-                    prootDst.setExecutable(true, false);
-                    Log.d(TAG, "Proot copied to: " + prootDst.getAbsolutePath());
-                } else {
-                    Log.d(TAG, "Proot already exists");
-                }
-                
-                // 设置 DNS
-                File resolvConf = new File(alpineDir, "etc/resolv.conf");
-                if (!resolvConf.exists()) {
-                    resolvConf.getParentFile().mkdirs();
-                    FileOutputStream fos = new FileOutputStream(resolvConf);
-                    fos.write("nameserver 8.8.8.8\nnameserver 8.8.4.4\n".getBytes());
-                    fos.close();
-                }
-                
-                // 通知 Go 代码初始化完成
-                Log.d(TAG, "Alpine environment ready, notifying Go...");
-                PanelManager.getInstance(this).setAlpineReady(dataDir);
                 
             } catch (Exception e) {
-                Log.e(TAG, "Failed to init Alpine environment", e);
+                Log.e(TAG, "Failed to check Alpine environment", e);
             }
         }).start();
     }

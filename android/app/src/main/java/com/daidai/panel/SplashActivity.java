@@ -74,7 +74,99 @@ public class SplashActivity extends AppCompatActivity {
         );
         
         initViews();
-        checkDependencies();
+        
+        // 初始化 Alpine 环境
+        statusText.setText("正在初始化环境...");
+        new Thread(() -> {
+            initAlpineEnvironment();
+            
+            handler.post(() -> {
+                checkDependencies();
+            });
+        }).start();
+    }
+
+    /**
+     * 初始化 Alpine 环境
+     */
+    private void initAlpineEnvironment() {
+        try {
+            String dataDir = getFilesDir().getAbsolutePath() + "/Dumb-Panel";
+            
+            // 解压 Alpine rootfs
+            File alpineDir = new File(dataDir, "alpine");
+            File alpineBin = new File(alpineDir, "bin/sh");
+            
+            if (!alpineBin.exists()) {
+                Log.d(TAG, "Extracting Alpine rootfs from assets...");
+                alpineDir.mkdirs();
+                
+                // 从 assets 解压
+                InputStream in = getAssets().open("alpine/alpine-rootfs.tar.gz");
+                File tmpFile = new File(dataDir, "alpine-rootfs.tar.gz");
+                FileOutputStream fos = new FileOutputStream(tmpFile);
+                byte[] buffer = new byte[4096];
+                int read;
+                while ((read = in.read(buffer)) != -1) {
+                    fos.write(buffer, 0, read);
+                }
+                fos.flush();
+                fos.close();
+                in.close();
+                
+                // 解压
+                ProcessBuilder pb = new ProcessBuilder("tar", "xzf", 
+                    tmpFile.getAbsolutePath(), "-C", alpineDir.getAbsolutePath());
+                Process process = pb.start();
+                int exitCode = process.waitFor();
+                Log.d(TAG, "Alpine rootfs extract exit code: " + exitCode);
+                
+                // 删除临时文件
+                tmpFile.delete();
+                
+                if (alpineBin.exists()) {
+                    Log.d(TAG, "Alpine rootfs extracted successfully");
+                } else {
+                    Log.e(TAG, "Alpine rootfs extraction failed");
+                }
+            } else {
+                Log.d(TAG, "Alpine rootfs already exists");
+            }
+            
+            // 复制 proot
+            File prootDst = new File(dataDir, "proot");
+            if (!prootDst.exists()) {
+                Log.d(TAG, "Copying proot from assets...");
+                InputStream in = getAssets().open("alpine/proot");
+                FileOutputStream fos = new FileOutputStream(prootDst);
+                byte[] buffer = new byte[4096];
+                int read;
+                while ((read = in.read(buffer)) != -1) {
+                    fos.write(buffer, 0, read);
+                }
+                fos.flush();
+                fos.close();
+                in.close();
+                prootDst.setExecutable(true, false);
+                Log.d(TAG, "Proot copied to: " + prootDst.getAbsolutePath());
+            } else {
+                Log.d(TAG, "Proot already exists");
+            }
+            
+            // 设置 DNS
+            File resolvConf = new File(alpineDir, "etc/resolv.conf");
+            if (!resolvConf.exists()) {
+                resolvConf.getParentFile().mkdirs();
+                FileOutputStream fos = new FileOutputStream(resolvConf);
+                fos.write("nameserver 8.8.8.8\nnameserver 8.8.4.4\n".getBytes());
+                fos.close();
+            }
+            
+            Log.d(TAG, "Alpine environment initialized");
+            
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to init Alpine environment", e);
+        }
     }
 
     private void initViews() {
