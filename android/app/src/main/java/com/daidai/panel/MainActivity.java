@@ -28,6 +28,7 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -57,8 +58,66 @@ public class MainActivity extends AppCompatActivity {
         initViews();
         panelManager = PanelManager.getInstance(this);
         
+        // 初始化 Alpine 环境（后台执行）
+        initAlpineEnvironment();
+        
         checkPermissions();
         startLogOverlayService();
+    }
+
+    /**
+     * 初始化 Alpine 环境
+     */
+    private void initAlpineEnvironment() {
+        new Thread(() -> {
+            try {
+                String dataDir = getFilesDir().getAbsolutePath() + "/Dumb-Panel";
+                String assetsDir = getFilesDir().getAbsolutePath() + "/assets";
+                
+                // 解压 Alpine rootfs
+                File alpineDir = new File(dataDir, "alpine");
+                File alpineTar = new File(assetsDir, "alpine-rootfs.tar.gz");
+                
+                if (!alpineDir.exists() && alpineTar.exists()) {
+                    Log.d(TAG, "Extracting Alpine rootfs...");
+                    // 解压
+                    ProcessBuilder pb = new ProcessBuilder("tar", "xzf", 
+                        alpineTar.getAbsolutePath(), "-C", alpineDir.getAbsolutePath());
+                    pb.start().waitFor();
+                    Log.d(TAG, "Alpine rootfs extracted");
+                }
+                
+                // 复制 proot
+                File prootSrc = new File(assetsDir, "proot");
+                File prootDst = new File(dataDir, "proot");
+                if (!prootDst.exists() && prootSrc.exists()) {
+                    copyFile(prootSrc, prootDst);
+                    prootDst.setExecutable(true, false);
+                    Log.d(TAG, "Proot copied");
+                }
+                
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to init Alpine environment", e);
+            }
+        }).start();
+    }
+
+    private void copyFile(File src, File dst) throws IOException {
+        InputStream in = null;
+        OutputStream out = null;
+        try {
+            in = new FileInputStream(src);
+            out = new FileOutputStream(dst);
+            byte[] buffer = new byte[4096];
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                out.write(buffer, 0, read);
+            }
+            out.flush();
+        } finally {
+            if (out != null) try { out.close(); } catch (IOException ignored) {}
+            if (in != null) try { in.close(); } catch (IOException ignored) {}
+        }
     }
 
     private void initViews() {
