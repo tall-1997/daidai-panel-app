@@ -155,10 +155,20 @@ public class SplashActivity extends AppCompatActivity {
                 fos.flush();
                 fos.close();
                 in.close();
+                
+                // 设置可执行权限
                 prootDst.setExecutable(true, false);
+                prootDst.setReadable(true, false);
+                prootDst.setWritable(true, false);
+                
+                // 验证权限
                 Log.d(TAG, "Proot copied to: " + prootDst.getAbsolutePath());
+                Log.d(TAG, "Proot can execute: " + prootDst.canExecute());
+                Log.d(TAG, "Proot can read: " + prootDst.canRead());
             } else {
                 Log.d(TAG, "Proot already exists");
+                // 确保权限正确
+                prootDst.setExecutable(true, false);
             }
             
             // 设置 DNS
