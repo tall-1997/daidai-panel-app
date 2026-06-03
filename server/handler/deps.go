@@ -747,7 +747,21 @@ func installDependency(id uint, depType, name string) {
 		cmd = exec.Command("npm", "install", "--prefix", filepath.Join(depsDir, "nodejs"), name)
 		cmd.Env = service.NpmInstallEnv(service.AppendProxyEnv(os.Environ()), service.CurrentNpmMirror())
 	case model.DepTypePython:
-		pipBin, extraFlags, _ := service.ResolvePipInstallCommand()
+		pipBin, extraFlags, usingSystemPip := service.ResolvePipInstallCommand()
+		
+		// 检查 pip 是否可用
+		if pipBin == "" || (usingSystemPip && pipBin == "pip3") {
+			// 检查 Android 运行时是否已安装
+			androidPythonBin := filepath.Join(depsDir, "bin", "python", "bin", "python3")
+			if _, err := os.Stat(androidPythonBin); os.IsNotExist(err) {
+				database.DB.Model(&model.Dependency{}).Where("id = ?", id).Updates(map[string]interface{}{
+					"status": model.DepStatusFailed,
+					"log":    "Python 运行时未安装。请先点击悬浮窗（左上角蓝色按钮）-> 安装 Python",
+				})
+				return
+			}
+		}
+		
 		cmd = exec.Command(pipBin, service.BuildPipInstallArgs(extraFlags, name)...)
 		cmd.Env = append(service.PipInstallEnv(service.AppendProxyEnv(os.Environ()), service.CurrentPipMirror()), "TMPDIR=/tmp")
 	case model.DepTypeLinux:
