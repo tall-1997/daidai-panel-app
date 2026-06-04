@@ -142,6 +142,51 @@ public class SplashActivity extends AppCompatActivity {
                 Log.d(TAG, "Alpine rootfs already exists");
             }
             
+            // 解压预编译 Python 虚拟环境
+            File venvDir = new File(dataDir, "deps/python/venv");
+            File venvBin = new File(venvDir, "bin/python");
+            if (!venvBin.exists()) {
+                Log.d(TAG, "Extracting prebuilt Python venv...");
+                InputStream in = getAssets().open("alpine/prebuilt-venv.tar.gz");
+                File tmpVenv = new File(dataDir, "prebuilt-venv.tar.gz");
+                FileOutputStream fos = new FileOutputStream(tmpVenv);
+                byte[] buffer = new byte[4096];
+                int read;
+                while ((read = in.read(buffer)) != -1) {
+                    fos.write(buffer, 0, read);
+                }
+                fos.flush();
+                fos.close();
+                in.close();
+                
+                // 解压到 venv 目录
+                venvDir.mkdirs();
+                ProcessBuilder venvPb = new ProcessBuilder("tar", "xzf",
+                    tmpVenv.getAbsolutePath(), "-C", venvDir.getAbsolutePath());
+                Process venvProcess = venvPb.start();
+                int venvExit = venvProcess.waitFor();
+                Log.d(TAG, "Prebuilt venv extract exit code: " + venvExit);
+                
+                // 删除临时文件
+                tmpVenv.delete();
+                
+                // 设置执行权限
+                File[] venvBins = new File(venvDir, "bin").listFiles();
+                if (venvBins != null) {
+                    for (File f : venvBins) {
+                        f.setExecutable(true, false);
+                    }
+                }
+                
+                if (venvBin.exists()) {
+                    Log.d(TAG, "Prebuilt venv extracted successfully");
+                } else {
+                    Log.e(TAG, "Prebuilt venv extraction failed");
+                }
+            } else {
+                Log.d(TAG, "Prebuilt venv already exists");
+            }
+            
             // proot 在 jniLibs 中，安装后自动解压到 nativeLibraryDir（有执行权限）
             String nativeLibDir = getApplicationInfo().nativeLibraryDir;
             File prootSrc = new File(nativeLibDir, "libproot.so");

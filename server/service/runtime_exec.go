@@ -326,6 +326,14 @@ func ensureManagedPythonVenv(syncCreate bool) bool {
 	defer managedPythonVenvMu.Unlock()
 
 	if info, err := os.Stat(resolveManagedVenvBin(venvDir)); err == nil && info.IsDir() {
+		log.Printf("[ensureManagedPythonVenv] Using prebuilt venv at: %s", venvDir)
+		return true
+	}
+
+	// 检查是否有预编译的 venv 脚本（由 Java 解压）
+	prebuiltPython := filepath.Join(venvDir, "bin", "python")
+	if fileExists(prebuiltPython) {
+		log.Printf("[ensureManagedPythonVenv] Prebuilt venv scripts found, skipping proot creation")
 		return true
 	}
 
