@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="accent">#52C41A</color>
+    <color name="background">#F5F5F5</color>
+    <color name="primary">#1890FF</color>
+    <color name="primary_dark">#096DD9</color>
+    <color name="text_primary">#333333</color>
+    <color name="text_secondary">#666666</color>
+    <color name="white">#FFFFFF</color>
+    <string name="app_name">呆呆面板</string>
+    <style name="Theme.DaidaiLauncher" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorPrimaryDark">@color/primary_dark</item>
+        <item name="colorAccent">@color/accent</item>
+        <item name="android:statusBarColor">@color/primary</item>
+    </style>
+</resources>
