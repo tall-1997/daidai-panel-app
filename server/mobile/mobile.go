@@ -121,25 +121,19 @@ func (s *MobileServer) Start(dataDir, webDir string, port int) error {
 	}
 	service.CleanupManagedHelperCopiesUnderRoot(cfg.Data.ScriptsDir)
 	
-	// Initialize Alpine + proot environment
+	// Initialize Alpine + rurima environment
 	// 直接检查 Alpine rootfs 是否存在，如果存在就初始化
 	prootMgr := service.GetProotManager()
 	dataDir = cfg.Data.Dir
 	alpineRootfs := filepath.Join(dataDir, "alpine", "bin", "sh")
-	termuxProot := filepath.Join(dataDir, "termux", "bin", "proot")
+	rurimaBin := filepath.Join(dataDir, "rurima")
 	
 	if _, err := os.Stat(alpineRootfs); err == nil {
 		// Alpine rootfs 存在，初始化 ProotManager
 		log.Printf("[Mobile] Alpine rootfs found, initializing...")
-		prootMgr.SetInitialized(dataDir, termuxProot)
+		prootMgr.SetInitialized(dataDir, rurimaBin)
 	} else {
 		log.Printf("[Mobile] Alpine rootfs not found: %v", err)
-		// 尝试使用原始 proot
-		originalProot := filepath.Join(dataDir, "proot")
-		if _, err := os.Stat(originalProot); err == nil {
-			log.Printf("[Mobile] Original proot found, initializing...")
-			prootMgr.SetInitialized(dataDir, originalProot)
-		}
 	}
 
 	service.InitSchedulerV2()

@@ -146,6 +146,29 @@ public class SplashActivity extends AppCompatActivity {
                 Log.d(TAG, "Alpine rootfs already exists");
             }
             
+            // 解压 rurima（容器运行时）
+            File rurimaDst = new File(dataDir, "rurima");
+            if (!rurimaDst.exists()) {
+                Log.d(TAG, "Extracting rurima from assets...");
+                InputStream in = getAssets().open("alpine/rurima");
+                FileOutputStream fos = new FileOutputStream(rurimaDst);
+                byte[] buffer = new byte[4096];
+                int read;
+                while ((read = in.read(buffer)) != -1) {
+                    fos.write(buffer, 0, read);
+                }
+                fos.flush();
+                fos.close();
+                in.close();
+                
+                // 设置执行权限
+                rurimaDst.setExecutable(true, false);
+                rurimaDst.setReadable(true, false);
+                Log.d(TAG, "Rurima extracted to: " + rurimaDst.getAbsolutePath());
+            } else {
+                Log.d(TAG, "Rurima already exists");
+            }
+            
             // 解压 Termux Python 环境（包含 proot 和 Python）
             File termuxDir = new File(dataDir, "termux");
             File termuxPython = new File(termuxDir, "bin/python3");

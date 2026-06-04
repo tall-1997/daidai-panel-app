@@ -147,27 +147,11 @@ func CreateManagedCommand(interpreter, scriptPath string, scriptArgs []string, w
 	}
 }
 
-// createProotCommand 使用 Alpine + proot 创建命令
+// createProotCommand 使用 Alpine + rurima 创建命令
 func createProotCommand(interpreter, scriptPath string, scriptArgs []string, workDir string, envVars map[string]string) (*exec.Cmd, func(), error) {
 	prootMgr := GetProotManager()
-	prootPath := prootMgr.getProotPath()
-	prootBin := prootMgr.prootBin
+	rurimaBin := prootMgr.rurimaBin
 	rootfsDir := prootMgr.rootfsDir
-	prootDir := filepath.Dir(prootBin)
-	
-	// 构建 proot 参数
-	prootArgs := []string{
-		"-R", rootfsDir,
-		"-w", "/tmp",
-		"-b", "/dev",
-		"-b", "/proc",
-		"-b", "/sys",
-	}
-	
-	// 添加环境变量
-	for k, v := range envVars {
-		prootArgs = append(prootArgs, "-E", k+"="+v)
-	}
 	
 	// 构建要执行的命令
 	var shellCmd string
@@ -180,13 +164,21 @@ func createProotCommand(interpreter, scriptPath string, scriptArgs []string, wor
 		shellCmd = fmt.Sprintf("cd /tmp && %s %s %s", interpreter, scriptPath, strings.Join(scriptArgs, " "))
 	}
 	
-	prootArgs = append(prootArgs, "/bin/sh", "-c", shellCmd)
+	// 添加环境变量
+	envArgs := ""
+	for k, v := range envVars {
+		envArgs += fmt.Sprintf("export %s='%s'; ", k, v)
+	}
 	
-	// 使用 sh -c 包装 proot 命令，设置 LD_LIBRARY_PATH
-	argsStr := strings.Join(prootArgs, " ")
-	prootCmd := fmt.Sprintf("LD_LIBRARY_PATH='%s' exec '%s' %s", prootDir, prootPath, argsStr)
+	// 使用 rurima 进入容器
+	// -p: 禁用 proc 挂载（Android 不支持）
+	// -N: 禁用网络命名空间
+	// -S: 禁用 seccomp
+	// -A: Android 模式
+	rurimaCmd := fmt.Sprintf("exec '%s' ruri -p -N -S -A '%s' /bin/sh -c '%s%s'",
+		rurimaBin, rootfsDir, envArgs, shellCmd)
 	
-	cmd := exec.Command("/system/bin/sh", "-c", prootCmd)
+	cmd := exec.Command("/system/bin/sh", "-c", rurimaCmd)
 	cmd.Dir = workDir
 	
 	cleanup := func() {}
