@@ -90,7 +90,16 @@ func (pm *ProotManager) SetInitialized(dataDir string, prootBin string) {
 	
 	pm.dataDir = dataDir
 	pm.rootfsDir = filepath.Join(dataDir, "alpine")
-	pm.prootBin = prootBin
+	
+	// 优先使用 Termux 的 proot（已验证可执行）
+	termuxProot := filepath.Join(dataDir, "termux", "bin", "proot")
+	if _, err := os.Stat(termuxProot); err == nil {
+		pm.prootBin = termuxProot
+		log.Printf("[ProotManager] Using Termux proot: %s", termuxProot)
+	} else {
+		pm.prootBin = prootBin
+		log.Printf("[ProotManager] Using original proot: %s", prootBin)
+	}
 	
 	// 使用 dataDir/proot 路径（Java 已复制并设置了执行权限）
 	pm.prootFdPath = ""
@@ -155,11 +164,14 @@ func (pm *ProotManager) ExecInAlpine(command string) (string, error) {
 	}
 
 	prootPath := pm.getProotPath()
+	// 设置 LD_LIBRARY_PATH 包含 Termux 的 lib 目录
+	termuxLib := filepath.Join(pm.dataDir, "termux", "lib")
 	prootDir := filepath.Dir(pm.prootBin)
+	ldPath := termuxLib + ":" + prootDir
 	
 	// 使用 sh -c 包装 proot 命令
 	prootCmd := fmt.Sprintf("LD_LIBRARY_PATH='%s' exec '%s' -R '%s' -w /root -b /dev -b /proc -b /sys /bin/sh -c '%s'",
-		prootDir, prootPath, pm.rootfsDir, command)
+		ldPath, prootPath, pm.rootfsDir, command)
 
 	cmd := exec.Command("/system/bin/sh", "-c", prootCmd)
 	output, err := cmd.CombinedOutput()
@@ -173,7 +185,10 @@ func (pm *ProotManager) ExecInAlpineWithEnv(command string, env map[string]strin
 	}
 
 	prootPath := pm.getProotPath()
+	// 设置 LD_LIBRARY_PATH 包含 Termux 的 lib 目录
+	termuxLib := filepath.Join(pm.dataDir, "termux", "lib")
 	prootDir := filepath.Dir(pm.prootBin)
+	ldPath := termuxLib + ":" + prootDir
 
 	// 构建环境变量参数
 	envArgs := ""
@@ -183,7 +198,7 @@ func (pm *ProotManager) ExecInAlpineWithEnv(command string, env map[string]strin
 
 	// 使用 sh -c 包装 proot 命令
 	prootCmd := fmt.Sprintf("LD_LIBRARY_PATH='%s' %s exec '%s' -R '%s' -w /root -b /dev -b /proc -b /sys /bin/sh -c '%s'",
-		prootDir, envArgs, prootPath, pm.rootfsDir, command)
+		ldPath, envArgs, prootPath, pm.rootfsDir, command)
 
 	cmd := exec.Command("/system/bin/sh", "-c", prootCmd)
 	output, err := cmd.CombinedOutput()

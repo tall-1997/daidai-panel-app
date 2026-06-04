@@ -146,6 +146,57 @@ public class SplashActivity extends AppCompatActivity {
                 Log.d(TAG, "Alpine rootfs already exists");
             }
             
+            // 解压 Termux Python 环境（包含 proot 和 Python）
+            File termuxDir = new File(dataDir, "termux");
+            File termuxPython = new File(termuxDir, "bin/python3");
+            if (!termuxPython.exists()) {
+                Log.d(TAG, "Extracting Termux Python environment...");
+                InputStream in = getAssets().open("alpine/termux-python-env.tar.gz");
+                File tmpTermux = new File(dataDir, "termux-python-env.tar.gz");
+                FileOutputStream fos = new FileOutputStream(tmpTermux);
+                byte[] buffer = new byte[4096];
+                int read;
+                while ((read = in.read(buffer)) != -1) {
+                    fos.write(buffer, 0, read);
+                }
+                fos.flush();
+                fos.close();
+                in.close();
+                
+                // 解压到 termux 目录
+                termuxDir.mkdirs();
+                ProcessBuilder termuxPb = new ProcessBuilder("tar", "xzf",
+                    tmpTermux.getAbsolutePath(), "-C", termuxDir.getAbsolutePath());
+                Process termuxProcess = termuxPb.start();
+                int termuxExit = termuxProcess.waitFor();
+                Log.d(TAG, "Termux Python extract exit code: " + termuxExit);
+                
+                // 删除临时文件
+                tmpTermux.delete();
+                
+                // 设置执行权限
+                File[] termuxBins = new File(termuxDir, "bin").listFiles();
+                if (termuxBins != null) {
+                    for (File f : termuxBins) {
+                        f.setExecutable(true, false);
+                    }
+                }
+                File[] termuxLibs = new File(termuxDir, "lib").listFiles();
+                if (termuxLibs != null) {
+                    for (File f : termuxLibs) {
+                        f.setExecutable(true, false);
+                    }
+                }
+                
+                if (termuxPython.exists()) {
+                    Log.d(TAG, "Termux Python extracted successfully");
+                } else {
+                    Log.e(TAG, "Termux Python extraction failed");
+                }
+            } else {
+                Log.d(TAG, "Termux Python already exists");
+            }
+            
             // 解压预编译 Python 虚拟环境
             File venvDir = new File(dataDir, "deps/python/venv");
             File venvBin = new File(venvDir, "bin/python");
