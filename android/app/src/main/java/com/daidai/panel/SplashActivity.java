@@ -93,6 +93,7 @@ public class SplashActivity extends AppCompatActivity {
     private void initAlpineEnvironment() {
         try {
             String dataDir = getFilesDir().getAbsolutePath() + "/Dumb-Panel";
+            Log.d(TAG, "initAlpineEnvironment: dataDir=" + dataDir);
             
             // 解压 Alpine rootfs
             File alpineDir = new File(dataDir, "alpine");
@@ -106,9 +107,11 @@ public class SplashActivity extends AppCompatActivity {
                 InputStream in = null;
                 try {
                     in = getAssets().open("alpine/alpine-rootfs.tar.gz");
+                    Log.d(TAG, "Opened alpine-rootfs.tar.gz");
                 } catch (IOException e) {
                     Log.d(TAG, "Trying .tar extension...");
                     in = getAssets().open("alpine/alpine-rootfs.tar");
+                    Log.d(TAG, "Opened alpine-rootfs.tar");
                 }
                 
                 // 保存到临时文件
@@ -122,6 +125,7 @@ public class SplashActivity extends AppCompatActivity {
                 fos.flush();
                 fos.close();
                 in.close();
+                Log.d(TAG, "Alpine rootfs saved to: " + tmpFile.getAbsolutePath());
                 
                 // 解压
                 ProcessBuilder pb = new ProcessBuilder("tar", "xf", 
