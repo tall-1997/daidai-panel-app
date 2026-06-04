@@ -120,7 +120,6 @@ func (s *MobileServer) Start(dataDir, webDir string, port int) error {
 		log.Printf("[Mobile] Builtin notify helpers ensured in: %s", cfg.Data.ScriptsDir)
 	}
 	service.CleanupManagedHelperCopiesUnderRoot(cfg.Data.ScriptsDir)
-	service.WarmManagedPythonVenv()
 	
 	// Initialize Alpine + proot environment
 	// 注意：Java 代码会先解压文件，然后调用 SetAlpineReady
@@ -128,9 +127,12 @@ func (s *MobileServer) Start(dataDir, webDir string, port int) error {
 	prootMgr := service.GetProotManager()
 	if prootMgr.IsInitialized() {
 		log.Printf("[Mobile] Alpine rootfs already initialized")
+		// Alpine 已初始化，立即创建 venv
+		service.WarmManagedPythonVenv()
 	} else {
 		log.Printf("[Mobile] Alpine rootfs not ready, waiting for Java...")
 		// 不返回错误，继续启动服务
+		// venv 会在 SetAlpineReady 被调用后创建
 	}
 
 	service.InitSchedulerV2()

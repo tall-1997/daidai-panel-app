@@ -97,6 +97,9 @@ func (pm *ProotManager) SetInitialized(dataDir string, prootBin string) {
 	
 	pm.initialized = true
 	log.Printf("[ProotManager] Alpine rootfs initialized: rootfs=%s, proot=%s", pm.rootfsDir, pm.prootBin)
+	
+	// Alpine 初始化完成后，异步创建 Python venv
+	go WarmManagedPythonVenv()
 }
 
 // loadBinaryToMemfd 将二进制文件加载到内存文件描述符
