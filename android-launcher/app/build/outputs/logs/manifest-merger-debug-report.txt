@@ -1,9 +1,9 @@
 -- Merging decision tree log ---
 manifest
-ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:2:1-27:12
-INJECTED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:2:1-27:12
-INJECTED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:2:1-27:12
-INJECTED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:2:1-27:12
+ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:2:1-35:12
+INJECTED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:2:1-35:12
+INJECTED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:2:1-35:12
+INJECTED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:2:1-35:12
 MERGED from [com.google.android.material:material:1.10.0] /root/.gradle/caches/transforms-3/6a9eadc129b78696356018c9397014d5/transformed/material-1.10.0/AndroidManifest.xml:17:1-24:12
 MERGED from [androidx.constraintlayout:constraintlayout:2.1.4] /root/.gradle/caches/transforms-3/793ccb56b70ec1b57faceba706b0fad9/transformed/constraintlayout-2.1.4/AndroidManifest.xml:2:1-11:12
 MERGED from [androidx.appcompat:appcompat-resources:1.6.1] /root/.gradle/caches/transforms-3/92e696ed1fa1905fdd62e9cbd3d7f496/transformed/appcompat-resources-1.6.1/AndroidManifest.xml:17:1-22:12
@@ -45,20 +45,20 @@ MERGED from [androidx.documentfile:documentfile:1.0.0] /root/.gradle/caches/tran
 MERGED from [androidx.localbroadcastmanager:localbroadcastmanager:1.0.0] /root/.gradle/caches/transforms-3/7900b53a1db7e264bc0fe921e4ce2f30/transformed/localbroadcastmanager-1.0.0/AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.print:print:1.0.0] /root/.gradle/caches/transforms-3/b772f8c5d8dc2fcf9aef29adb63c4be0/transformed/print-1.0.0/AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.annotation:annotation-experimental:1.3.0] /root/.gradle/caches/transforms-3/1a6b5a91909be6f29b0a8f94652dda67/transformed/annotation-experimental-1.3.0/AndroidManifest.xml:17:1-22:12
-INJECTED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:2:1-27:12
-INJECTED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:2:1-27:12
-INJECTED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:2:1-27:12
+INJECTED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:2:1-35:12
+INJECTED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:2:1-35:12
+INJECTED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:2:1-35:12
 	package
 		ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:3:5-34
 		INJECTED from /workspace/android-launcher/app/src/main/AndroidManifest.xml
 		INJECTED from /workspace/android-launcher/app/src/main/AndroidManifest.xml
 	android:versionName
 		INJECTED from /workspace/android-launcher/app/src/main/AndroidManifest.xml
-		ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:2:1-27:12
+		ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:2:1-35:12
 		INJECTED from /workspace/android-launcher/app/src/main/AndroidManifest.xml
 	android:versionCode
 		INJECTED from /workspace/android-launcher/app/src/main/AndroidManifest.xml
-		ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:2:1-27:12
+		ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:2:1-35:12
 		INJECTED from /workspace/android-launcher/app/src/main/AndroidManifest.xml
 	xmlns:android
 		ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:2:11-69
@@ -70,8 +70,26 @@ uses-permission#android.permission.REQUEST_INSTALL_PACKAGES
 ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:6:5-83
 	android:name
 		ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:6:22-80
+queries
+ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:9:5-14:15
+package#com.termux
+ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:10:9-46
+	android:name
+		ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:10:18-43
+package#com.termux.debug
+ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:11:9-52
+	android:name
+		ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:11:18-49
+package#com.termux.nightly
+ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:12:9-54
+	android:name
+		ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:12:18-51
+package#com.termux.view
+ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:13:9-51
+	android:name
+		ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:13:18-48
 application
-ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:8:5-25:19
+ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:16:5-33:19
 MERGED from [com.google.android.material:material:1.10.0] /root/.gradle/caches/transforms-3/6a9eadc129b78696356018c9397014d5/transformed/material-1.10.0/AndroidManifest.xml:22:5-20
 MERGED from [com.google.android.material:material:1.10.0] /root/.gradle/caches/transforms-3/6a9eadc129b78696356018c9397014d5/transformed/material-1.10.0/AndroidManifest.xml:22:5-20
 MERGED from [androidx.constraintlayout:constraintlayout:2.1.4] /root/.gradle/caches/transforms-3/793ccb56b70ec1b57faceba706b0fad9/transformed/constraintlayout-2.1.4/AndroidManifest.xml:9:5-20
@@ -91,33 +109,33 @@ MERGED from [androidx.startup:startup-runtime:1.1.1] /root/.gradle/caches/transf
 	android:appComponentFactory
 		ADDED from [androidx.core:core:1.9.0] /root/.gradle/caches/transforms-3/a1e46d166522961e409a11ff3098f339/transformed/core-1.9.0/AndroidManifest.xml:28:18-86
 	android:supportsRtl
-		ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:13:9-35
+		ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:21:9-35
 	android:label
-		ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:11:9-41
+		ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:19:9-41
 	android:roundIcon
-		ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:12:9-54
+		ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:20:9-54
 	android:icon
-		ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:10:9-43
+		ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:18:9-43
 	android:allowBackup
-		ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:9:9-35
+		ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:17:9-35
 	android:theme
-		ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:14:9-52
+		ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:22:9-52
 activity#com.daidai.launcher.MainActivity
-ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:16:9-23:20
+ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:24:9-31:20
 	android:exported
-		ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:18:13-36
+		ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:26:13-36
 	android:name
-		ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:17:13-41
+		ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:25:13-41
 intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
-ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:19:13-22:29
+ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:27:13-30:29
 action#android.intent.action.MAIN
-ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:20:17-69
+ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:28:17-69
 	android:name
-		ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:20:25-66
+		ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:28:25-66
 category#android.intent.category.LAUNCHER
-ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:21:17-77
+ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:29:17-77
 	android:name
-		ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:21:27-74
+		ADDED from /workspace/android-launcher/app/src/main/AndroidManifest.xml:29:27-74
 uses-sdk
 INJECTED from /workspace/android-launcher/app/src/main/AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from /workspace/android-launcher/app/src/main/AndroidManifest.xml
