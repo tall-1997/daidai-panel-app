@@ -1,0 +1,175 @@
+name: Build ZeroTermux Daidai Panel
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up JDK 17
+      uses: actions/setup-java@v3
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+    
+    - name: Set up Android SDK
+      uses: android-actions/setup-android@v2
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y curl wget jq
+    
+    - name: Clone ZeroTermux
+      run: |
+        git clone --depth 1 https://github.com/hanxinhao000/ZeroTermux.git zerotermux
+    
+    - name: Download Daidai Panel assets
+      run: |
+        # 获取最新版本
+        LATEST_VERSION=$(curl -s "https://api.github.com/repos/tall-1997/daidai-panel-app/releases/latest" | jq -r '.tag_name')
+        if [ "$LATEST_VERSION" = "null" ] || [ -z "$LATEST_VERSION" ]; then
+          LATEST_VERSION="v0.0.2"
+        fi
+        
+        # 创建 assets 目录
+        mkdir -p zerotermux/app/src/main/assets/daidai/web
+        
+        # 下载面板程序
+        curl -L -o zerotermux/app/src/main/assets/daidai/daidai-server-arm64 \
+          "https://github.com/tall-1997/daidai-panel-app/releases/download/$LATEST_VERSION/daidai-server-linux-arm64"
+        chmod +x zerotermux/app/src/main/assets/daidai/daidai-server-arm64
+        
+        # 下载前端资源
+        curl -L -o web.tar.gz \
+          "https://github.com/tall-1997/daidai-panel-app/releases/download/$LATEST_VERSION/web.tar.gz"
+        tar -xzf web.tar.gz -C zerotermux/app/src/main/assets/daidai/web
+        rm -f web.tar.gz
+        
+        # 创建配置文件
+        cat > zerotermux/app/src/main/assets/daidai/config.yaml << 'EOF'
+        server:
+          host: 0.0.0.0
+          port: 5700
+          mode: release
+        data:
+          dir: /opt/daidai-panel/Dumb-Panel
+          db: /opt/daidai-panel/Dumb-Panel/daidai.db
+        web:
+          dir: /opt/daidai-panel/web
+        EOF
+    
+    - name: Create init scripts
+      run: |
+        # 创建初始化脚本
+        cat > zerotermux/app/src/main/assets/daidai/init.sh << 'INITEOF'
+        #!/data/data/com.termux/files/usr/bin/bash
+        DAIDAI_DIR="/opt/daidai-panel"
+        DAIDAI_BIN="$DAIDAI_DIR/daidai-server"
+        DAIDAI_LOG="$DAIDAI_DIR/daidai.log"
+        
+        if pgrep -f "daidai-server" > /dev/null 2>&1; then
+            return 0 2>/dev/null || exit 0
+        fi
+        
+        pkg update -y > /dev/null 2>&1
+        pkg install -y python nodejs > /dev/null 2>&1
+        
+        mkdir -p "$DAIDAI_DIR/Dumb-Panel/scripts" "$DAIDAI_DIR/Dumb-Panel/logs" "$DAIDAI_DIR/Dumb-Panel/backups"
+        
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        cp "$SCRIPT_DIR/daidai-server-arm64" "$DAIDAI_BIN"
+        chmod +x "$DAIDAI_BIN"
+        cp -r "$SCRIPT_DIR/web" "$DAIDAI_DIR/web"
+        cp "$SCRIPT_DIR/config.yaml" "$DAIDAI_DIR/config.yaml"
+        
+        cd "$DAIDAI_DIR"
+        nohup "$DAIDAI_BIN" > "$DAIDAI_LOG" 2>&1 &
+        sleep 3
+        
+        if pgrep -f "daidai-server" > /dev/null 2>&1; then
+            echo "=========================================="
+            echo "  呆呆面板启动成功！"
+            echo "  访问地址: http://127.0.0.1:5700"
+            echo "=========================================="
+        fi
+        INITEOF
+        chmod +x zerotermux/app/src/main/assets/daidai/init.sh
+        
+        # 创建自动启动脚本
+        cat > zerotermux/app/src/main/assets/daidai/autostart.sh << 'AUTOEOF'
+        #!/data/data/com.termux/files/usr/bin/bash
+        if [ ! -f /opt/daidai-panel/daidai-server ]; then
+            if [ -f ~/daidai/init.sh ]; then
+                source ~/daidai/init.sh
+            fi
+        else
+            if ! pgrep -f "daidai-server" > /dev/null 2>&1; then
+                cd /opt/daidai-panel
+                nohup ./daidai-server > daidai.log 2>&1 &
+                sleep 2
+                if pgrep -f "daidai-server" > /dev/null 2>&1; then
+                    echo ""
+                    echo "╔══════════════════════════════════════════╗"
+                    echo "║        呆呆面板已启动                      ║"
+                    echo "║  访问地址: http://127.0.0.1:5700           ║"
+                    echo "╚══════════════════════════════════════════╝"
+                    echo ""
+                fi
+            fi
+        fi
+        AUTOEOF
+        chmod +x zerotermux/app/src/main/assets/daidai/autostart.sh
+    
+    - name: Modify .bashrc
+      run: |
+        BASHRC="zerotermux/app/src/main/assets/.bashrc"
+        if [ -f "$BASHRC" ]; then
+          cat >> "$BASHRC" << 'BASHEOF'
+        
+        # 呆呆面板自动启动
+        if [ -f ~/daidai/autostart.sh ]; then
+            source ~/daidai/autostart.sh
+        fi
+        
+        alias daidai-start='bash ~/daidai/init.sh'
+        alias daidai-stop='pkill -f daidai-server'
+        alias daidai-status='pgrep -f daidai-server > /dev/null && echo "运行中: http://127.0.0.1:5700" || echo "未运行"'
+        BASHEOF
+        else
+          cat > "$BASHRC" << 'BASHEOF'
+        # 呆呆面板自动启动
+        if [ -f ~/daidai/autostart.sh ]; then
+            source ~/daidai/autostart.sh
+        fi
+        
+        alias daidai-start='bash ~/daidai/init.sh'
+        alias daidai-stop='pkill -f daidai-server'
+        alias daidai-status='pgrep -f daidai-server > /dev/null && echo "运行中: http://127.0.0.1:5700" || echo "未运行"'
+        BASHEOF
+        fi
+    
+    - name: Build APK
+      run: |
+        cd zerotermux
+        chmod +x gradlew
+        ./gradlew assembleDebug
+    
+    - name: Rename APK
+      run: |
+        mv zerotermux/app/build/outputs/apk/debug/app-debug.apk daidai-panel-zerotermux.apk
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: daidai-panel-zerotermux.apk
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
