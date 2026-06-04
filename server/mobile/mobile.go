@@ -122,17 +122,24 @@ func (s *MobileServer) Start(dataDir, webDir string, port int) error {
 	service.CleanupManagedHelperCopiesUnderRoot(cfg.Data.ScriptsDir)
 	
 	// Initialize Alpine + proot environment
-	// 注意：Java 代码会先解压文件，然后调用 SetAlpineReady
-	// 这里只是检查是否已经初始化
+	// 直接检查 Alpine rootfs 是否存在，如果存在就初始化
 	prootMgr := service.GetProotManager()
-	if prootMgr.IsInitialized() {
-		log.Printf("[Mobile] Alpine rootfs already initialized")
-		// Alpine 已初始化，立即创建 venv
-		service.WarmManagedPythonVenv()
+	dataDir = cfg.Data.Dir
+	alpineRootfs := filepath.Join(dataDir, "alpine", "bin", "sh")
+	termuxProot := filepath.Join(dataDir, "termux", "bin", "proot")
+	
+	if _, err := os.Stat(alpineRootfs); err == nil {
+		// Alpine rootfs 存在，初始化 ProotManager
+		log.Printf("[Mobile] Alpine rootfs found, initializing...")
+		prootMgr.SetInitialized(dataDir, termuxProot)
 	} else {
-		log.Printf("[Mobile] Alpine rootfs not ready, waiting for Java...")
-		// 不返回错误，继续启动服务
-		// venv 会在 SetAlpineReady 被调用后创建
+		log.Printf("[Mobile] Alpine rootfs not found: %v", err)
+		// 尝试使用原始 proot
+		originalProot := filepath.Join(dataDir, "proot")
+		if _, err := os.Stat(originalProot); err == nil {
+			log.Printf("[Mobile] Original proot found, initializing...")
+			prootMgr.SetInitialized(dataDir, originalProot)
+		}
 	}
 
 	service.InitSchedulerV2()
