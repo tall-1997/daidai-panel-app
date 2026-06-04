@@ -20,6 +20,7 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -141,11 +142,15 @@ public class SplashActivity extends AppCompatActivity {
                 Log.d(TAG, "Alpine rootfs already exists");
             }
             
-            // 复制 proot 和 libtalloc.so.2 从 assets 到 dataDir
+            // proot 在 jniLibs 中，安装后自动解压到 nativeLibraryDir（有执行权限）
+            String nativeLibDir = getApplicationInfo().nativeLibraryDir;
+            File prootSrc = new File(nativeLibDir, "libproot.so");
+            
+            // 复制到 dataDir 并设置执行权限
             File prootDst = new File(dataDir, "proot");
-            if (!prootDst.exists()) {
-                Log.d(TAG, "Copying proot from assets...");
-                InputStream in = getAssets().open("alpine/proot");
+            if (!prootDst.exists() && prootSrc.exists()) {
+                Log.d(TAG, "Copying proot from nativeLibraryDir...");
+                InputStream in = new FileInputStream(prootSrc);
                 FileOutputStream fos = new FileOutputStream(prootDst);
                 byte[] buffer = new byte[4096];
                 int read;
@@ -155,14 +160,19 @@ public class SplashActivity extends AppCompatActivity {
                 fos.flush();
                 fos.close();
                 in.close();
+                
+                // 设置执行权限
+                prootDst.setExecutable(true, false);
+                prootDst.setReadable(true, false);
                 Log.d(TAG, "Proot copied to: " + prootDst.getAbsolutePath());
             }
             
             // 复制 libtalloc.so.2（proot 的依赖库）
+            File libtallocSrc = new File(nativeLibDir, "libtalloc.so");
             File libtallocDst = new File(dataDir, "libtalloc.so.2");
-            if (!libtallocDst.exists()) {
-                Log.d(TAG, "Copying libtalloc.so.2 from assets...");
-                InputStream in = getAssets().open("alpine/libtalloc.so.2");
+            if (!libtallocDst.exists() && libtallocSrc.exists()) {
+                Log.d(TAG, "Copying libtalloc.so from nativeLibraryDir...");
+                InputStream in = new FileInputStream(libtallocSrc);
                 FileOutputStream fos = new FileOutputStream(libtallocDst);
                 byte[] buffer = new byte[4096];
                 int read;

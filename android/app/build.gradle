@@ -16,16 +16,16 @@ android {
         
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         
-        // NDK配置
+        // NDK配置 - 只打包 arm64-v8a（proot 仅支持 arm64）
         ndk {
-            abiFilters 'arm64-v8a', 'armeabi-v7a'
+            abiFilters 'arm64-v8a'
         }
     }
 
     buildTypes {
         release {
-            minifyEnabled true
-            shrinkResources true
+            minifyEnabled false
+            shrinkResources false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         debug {
@@ -45,9 +45,10 @@ android {
         abortOnError false
     }
     
-    // 打包选项
+    // 打包选项 - 不剥离 proot 和 libtalloc 的符号
     packagingOptions {
-        // 合并重复的LICENSE文件
+        doNotStrip '**/libproot.so'
+        doNotStrip '**/libtalloc.so'
         merge '**/LICENSE'
         merge '**/LICENSE.txt'
         merge '**/NOTICE'

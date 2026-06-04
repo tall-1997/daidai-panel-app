@@ -92,18 +92,11 @@ func (pm *ProotManager) SetInitialized(dataDir string, prootBin string) {
 	pm.rootfsDir = filepath.Join(dataDir, "alpine")
 	pm.prootBin = prootBin
 	
-	// 尝试使用 memfd_create 将 proot 加载到内存中执行
-	// 这样可以绕过 Android 的 noexec 和 SELinux 限制
-	if fd, err := loadBinaryToMemfd(prootBin); err == nil {
-		pm.prootFdPath = fmt.Sprintf("/proc/self/fd/%d", fd)
-		log.Printf("[ProotManager] Proot loaded to memfd: %s", pm.prootFdPath)
-	} else {
-		log.Printf("[ProotManager] Failed to load proot to memfd: %v, falling back to direct path", err)
-		pm.prootFdPath = ""
-	}
+	// 使用 dataDir/proot 路径（Java 已复制并设置了执行权限）
+	pm.prootFdPath = ""
 	
 	pm.initialized = true
-	log.Printf("[ProotManager] Alpine rootfs initialized by Java: %s, proot: %s, memfd: %s", pm.rootfsDir, pm.prootBin, pm.prootFdPath)
+	log.Printf("[ProotManager] Alpine rootfs initialized: rootfs=%s, proot=%s", pm.rootfsDir, pm.prootBin)
 }
 
 // loadBinaryToMemfd 将二进制文件加载到内存文件描述符
