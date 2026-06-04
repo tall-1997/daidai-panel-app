@@ -60,6 +60,8 @@ public class SplashActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_splash);
         
+        Log.d(TAG, "SplashActivity onCreate started");
+        
         handler = new Handler(Looper.getMainLooper());
         
         filePickerLauncher = registerForActivityResult(
@@ -78,10 +80,13 @@ public class SplashActivity extends AppCompatActivity {
         
         // 初始化 Alpine 环境
         statusText.setText("正在初始化环境...");
+        Log.d(TAG, "Starting Alpine environment initialization...");
         new Thread(() -> {
+            Log.d(TAG, "initAlpineEnvironment thread started");
             initAlpineEnvironment();
             
             handler.post(() -> {
+                Log.d(TAG, "checkDependencies called");
                 checkDependencies();
             });
         }).start();
