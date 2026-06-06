@@ -887,9 +887,9 @@ onMounted(loadApps)
 }
 
 :deep(.el-table) {
-  --el-table-border-color: #f0f0f0;
-  .el-table__header-wrapper th { border-bottom: 1px solid #e8e8e8; }
-  .el-table__row td { border-bottom: 1px solid #f5f5f5; }
+  --el-table-border-color: var(--el-border-color-lighter);
+  .el-table__header-wrapper th { border-bottom: 1px solid var(--el-border-color-lighter); }
+  .el-table__row td { border-bottom: 1px solid var(--el-border-color-lighter); }
   .el-table__cell { padding: 12px 0; }
 }
 
@@ -906,11 +906,11 @@ onMounted(loadApps)
 }
 
 .info-card {
-  background: #fff;
+  background: var(--el-bg-color);
   border-radius: 12px;
   padding: 24px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--el-border-color-lighter);
 
   &__header {
     display: flex;

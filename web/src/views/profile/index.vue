@@ -989,7 +989,7 @@ onUnmounted(() => {
   font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.2px;
-  background: #f5f5f5;
+  background: var(--el-fill-color-light);
   border: 1px solid var(--profile-border);
   color: var(--el-text-color-regular);
 }
@@ -1499,7 +1499,7 @@ onUnmounted(() => {
   height: 220px;
   padding: 10px;
   border-radius: 12px;
-  background: #fff;
+  background: var(--el-bg-color);
   border: 1px solid var(--profile-border);
 }
 

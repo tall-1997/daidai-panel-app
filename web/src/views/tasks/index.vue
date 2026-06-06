@@ -1338,14 +1338,14 @@ async function handleImport(event: Event) {
 }
 
 :deep(.el-table) {
-  --el-table-border-color: #f0f0f0;
+  --el-table-border-color: var(--el-border-color-lighter);
 
   .el-table__header-wrapper th {
-    border-bottom: 1px solid #e8e8e8;
+    border-bottom: 1px solid var(--el-border-color-lighter);
   }
 
   .el-table__row td {
-    border-bottom: 1px solid #f5f5f5;
+    border-bottom: 1px solid var(--el-border-color-lighter);
   }
 
   .el-table__cell {

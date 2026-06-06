@@ -316,7 +316,7 @@ watch(
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: var(--el-bg-color);
   font-family: var(--dd-font-ui);
   overflow: hidden;
 }
@@ -339,8 +339,8 @@ watch(
   padding: 36px 32px 32px;
   text-align: center;
   border-radius: 16px;
-  background: #f5f7fa;
-  border: 1px solid #f0f0f0;
+  background: var(--el-fill-color-light);
+  border: 1px solid var(--el-border-color-lighter);
   overflow: hidden;
   isolation: isolate;
 }
@@ -416,8 +416,8 @@ watch(
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  border-bottom: 1px solid #f0f0f0;
-  background: #fff;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  background: var(--el-bg-color);
   flex-shrink: 0;
   min-width: 0;
 }
@@ -644,9 +644,9 @@ watch(
 .binary-card {
   margin: 24px;
   padding: 24px 28px;
-  border: 1px dashed #e8e8e8;
+  border: 1px dashed var(--el-border-color-lighter);
   border-radius: 12px;
-  background: #f5f7fa;
+  background: var(--el-fill-color-light);
 
   .binary-card-title {
     font-size: 14px;
@@ -673,11 +673,11 @@ watch(
   justify-content: space-between;
   gap: 8px;
   padding: 6px 18px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--el-border-color-lighter);
   font-family: var(--dd-font-mono);
   font-size: 11px;
   color: var(--el-text-color-placeholder);
-  background: #fafafa;
+  background: var(--el-fill-color-lighter);
 }
 
 .status-group {

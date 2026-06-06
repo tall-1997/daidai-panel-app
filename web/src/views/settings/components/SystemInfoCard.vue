@@ -90,7 +90,7 @@ async function handleCopyMachineCode(code: string) {
 .mt-card {
   margin-top: 16px;
   border-radius: 12px;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--el-border-color-lighter);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 

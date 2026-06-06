@@ -792,7 +792,7 @@ const captchaHintText = computed(() => {
 
 .login-left {
   flex: 1;
-  background: linear-gradient(135deg, #f5f5f5, #e8e8e8);
+  background: linear-gradient(135deg, var(--el-fill-color-light), var(--el-fill-color));
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -811,7 +811,7 @@ const captchaHintText = computed(() => {
 
 .login-right {
   flex: 1;
-  background: #fff;
+  background: var(--el-bg-color);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -822,7 +822,7 @@ const captchaHintText = computed(() => {
 .login-loading {
   text-align: center;
   padding: 60px 0;
-  color: #8c8c8c;
+  color: var(--el-text-color-secondary);
   font-size: 14px;
 }
 
@@ -846,14 +846,14 @@ const captchaHintText = computed(() => {
   h2 {
     font-size: 26px;
     font-weight: 700;
-    color: #1f1f1f;
+    color: var(--el-text-color-primary);
     margin: 0 0 6px;
     transition: color 0.4s;
   }
 
   p {
     font-size: 14px;
-    color: #8c8c8c;
+    color: var(--el-text-color-secondary);
     margin: 0;
     transition: color 0.4s;
   }
@@ -882,9 +882,9 @@ const captchaHintText = computed(() => {
 
 .captcha-panel {
   width: 100%;
-  border: 1px solid rgba(31, 31, 31, 0.08);
+  border: 1px solid var(--el-border-color-lighter);
   border-radius: 12px;
-  background: #fafafc;
+  background: var(--el-fill-color-light);
   padding: 14px 16px;
 }
 
@@ -898,14 +898,14 @@ const captchaHintText = computed(() => {
 .captcha-panel__title {
   font-size: 14px;
   font-weight: 600;
-  color: #1f1f1f;
+  color: var(--el-text-color-primary);
 }
 
 .captcha-panel__hint {
   margin: 10px 0 0;
   font-size: 13px;
   line-height: 1.6;
-  color: #6b7280;
+  color: var(--el-text-color-secondary);
 }
 
 .captcha-panel__actions {
@@ -917,7 +917,7 @@ const captchaHintText = computed(() => {
 
 .pwd-toggle {
   cursor: pointer;
-  color: #8c8c8c;
+  color: var(--el-text-color-secondary);
   transition: color 0.3s;
 
   &:hover {
@@ -931,12 +931,12 @@ const captchaHintText = computed(() => {
   border-radius: 10px;
   font-weight: 600;
   font-size: 15px;
-  background: #1f1f1f;
+  background: var(--el-text-color-primary);
   border: none;
   transition: all 0.3s;
 
   &:hover {
-    background: #333 !important;
+    background: var(--el-text-color-regular) !important;
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
   }
@@ -950,7 +950,7 @@ const captchaHintText = computed(() => {
   text-align: center;
   margin-top: 16px;
   font-size: 12px;
-  color: #bfbfbf;
+  color: var(--el-text-color-placeholder);
   transition: color 0.4s;
 }
 

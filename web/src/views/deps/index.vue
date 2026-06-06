@@ -1217,9 +1217,9 @@ onBeforeUnmount(() => {
 .pagination-total { font-size: 13px; color: var(--el-text-color-secondary); }
 
 :deep(.el-table) {
-  --el-table-border-color: #f0f0f0;
-  .el-table__header-wrapper th { border-bottom: 1px solid #e8e8e8; }
-  .el-table__row td { border-bottom: 1px solid #f5f5f5; }
+  --el-table-border-color: var(--el-border-color-lighter);
+  .el-table__header-wrapper th { border-bottom: 1px solid var(--el-border-color-lighter); }
+  .el-table__row td { border-bottom: 1px solid var(--el-border-color-lighter); }
   .el-table__cell { padding: 8px 0; }
   .el-table__fixed-right .el-table__cell { padding-left: 4px; padding-right: 4px; }
 }

@@ -366,7 +366,7 @@ async function handleCancelEdit() {
       min-height: 0;
       overflow: hidden;
       border-right: none;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid var(--el-border-color-lighter);
     }
 
     :deep(.scripts-editor) {
@@ -408,7 +408,7 @@ async function handleCancelEdit() {
       min-height: 0;
       overflow: hidden;
       border-right: none;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid var(--el-border-color-lighter);
     }
 
     :deep(.scripts-editor) {
